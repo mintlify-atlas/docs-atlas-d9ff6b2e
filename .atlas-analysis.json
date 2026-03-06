@@ -1,0 +1,123 @@
+{
+  "projectType": "sdk-library",
+  "projectName": "PyPowSyBl",
+  "projectDescription": "A Python SDK for power system modeling, simulation, and analysis based on PowSyBl and GraalVM",
+  "theme": "palm",
+  "primaryColor": "#94cb04",
+  "lightColor": "#545454",
+  "darkColor": null,
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Getting Started",
+            "pages": [
+              "introduction",
+              "installation",
+              "quickstart"
+            ]
+          },
+          {
+            "group": "User Guide",
+            "pages": [
+              "user-guide/network",
+              "user-guide/loadflow",
+              "user-guide/security-analysis",
+              "user-guide/sensitivity-analysis",
+              "user-guide/short-circuit",
+              "user-guide/dynamic-simulation",
+              "user-guide/network-visualization",
+              "user-guide/per-unit",
+              "user-guide/advanced-parameters",
+              "user-guide/logging"
+            ]
+          },
+          {
+            "group": "Examples",
+            "pages": [
+              "examples/ieee-networks",
+              "examples/file-formats",
+              "examples/network-modification",
+              "examples/grid2op-integration"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "Core",
+            "pages": [
+              "api-reference/network",
+              "api-reference/loadflow",
+              "api-reference/security",
+              "api-reference/sensitivity",
+              "api-reference/shortcircuit"
+            ]
+          },
+          {
+            "group": "Advanced",
+            "pages": [
+              "api-reference/dynamic",
+              "api-reference/flowdecomposition",
+              "api-reference/rao",
+              "api-reference/glsk",
+              "api-reference/voltage-initializer"
+            ]
+          },
+          {
+            "group": "Integrations",
+            "pages": [
+              "api-reference/grid2op",
+              "api-reference/pandapower"
+            ]
+          },
+          {
+            "group": "Utilities",
+            "pages": [
+              "api-reference/report",
+              "api-reference/exceptions"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Power network modeling and manipulation",
+    "AC and DC load flow calculations",
+    "Security analysis with contingency simulations",
+    "Sensitivity analysis for power systems",
+    "Short-circuit current calculations",
+    "Dynamic simulation capabilities",
+    "Support for multiple formats (CGMES, XIIDM, PSS/E, MATPOWER)",
+    "Network visualization with SVG diagrams",
+    "Grid2Op integration for reinforcement learning",
+    "PandaPower network conversion"
+  ],
+  "publicApiSurface": [
+    "pypowsybl.network.Network",
+    "pypowsybl.network.load()",
+    "pypowsybl.network.create_ieee14()",
+    "pypowsybl.loadflow.run_ac()",
+    "pypowsybl.loadflow.run_dc()",
+    "pypowsybl.loadflow.Parameters",
+    "pypowsybl.security.create_analysis()",
+    "pypowsybl.security.SecurityAnalysisResult",
+    "pypowsybl.sensitivity.create_ac_analysis()",
+    "pypowsybl.sensitivity.create_dc_analysis()",
+    "pypowsybl.shortcircuit.run()",
+    "pypowsybl.dynamic.run_simulation()",
+    "pypowsybl.flowdecomposition.create_flow_decomposition()",
+    "pypowsybl.rao.run()",
+    "pypowsybl.glsk.load()",
+    "pypowsybl.voltage_initializer.run()",
+    "pypowsybl.grid2op.Grid2OpBackend",
+    "pypowsybl.network.convert_from_pandapower()",
+    "pypowsybl.report.Reporter",
+    "pypowsybl.PyPowsyblError"
+  ]
+}
