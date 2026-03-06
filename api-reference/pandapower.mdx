@@ -1,0 +1,284 @@
+---
+title: 'Pandapower Integration'
+description: 'Convert pandapower networks to PyPowSyBl format'
+---
+
+## Overview
+
+The pandapower integration provides a conversion function that transforms pandapower networks into PyPowSyBl networks. This allows you to leverage PyPowSyBl's simulation capabilities with networks created in pandapower, a popular power system analysis tool.
+
+## Conversion Function
+
+### convert_from_pandapower
+
+Convert a pandapower network to a PyPowSyBl network.
+
+```python
+from pypowsybl.network import convert_from_pandapower
+import pandapower as pp
+import pandapower.networks as pn
+
+# Load a pandapower network
+pp_net = pn.case9()
+
+# Convert to PyPowSyBl
+network = convert_from_pandapower(pp_net)
+
+# Now use PyPowSyBl functions
+print(network.get_buses())
+```
+
+<ParamField path="n_pdp" type="pandapowerNet" required>
+  The pandapower network to convert
+</ParamField>
+
+<ResponseField name="network" type="Network">
+  A PyPowSyBl Network object with the converted network data
+</ResponseField>
+
+## Conversion Details
+
+### Network Structure
+
+The converter creates a simplified network structure:
+- All voltage levels are placed in a single giant substation with ID `'s'`
+- Bus-breaker topology is used for all voltage levels
+- Voltage level IDs follow the pattern: `'sub_{bus_index}'`
+- Bus IDs follow the pattern: `'bus_{bus_index}'`
+
+### Element Mapping
+
+The converter handles the following pandapower elements:
+
+#### Buses
+
+Pandapower buses are converted to PyPowSyBl voltage levels and buses:
+- Each pandapower bus becomes a voltage level with one bus
+- Nominal voltage (`vn_kv`) is preserved
+- Voltage limits (`min_vm_pu`, `max_vm_pu`) are converted if present
+
+#### Loads
+
+Pandapower loads are converted to PyPowSyBl loads:
+- Active power (`p_mw`) and reactive power (`q_mvar`) setpoints
+- In-service status determines initial connection
+- Load IDs follow the pattern: `'load_{bus}_{index}'`
+
+#### Generators
+
+Three types of pandapower generators are converted:
+
+1. **Regular generators** (`gen`): Standard synchronous generators with voltage control
+2. **External grids** (`ext_grid`): Treated as generators with slack bus capability
+3. **Static generators** (`sgen`): Converted to generators without voltage regulation
+
+Generator attributes:
+- Active power setpoint (`p_mw`)
+- Voltage setpoint (`vm_pu`) for voltage-regulating generators
+- Reactive power limits (`min_q_mvar`, `max_q_mvar`) when available
+- Active power limits (`min_p_mw`, `max_p_mw`) with defaults if not specified
+- Slack weight for participation in slack distribution
+- Generator IDs: `'gen_{bus}_{index}'` or `'sgen_{bus}_{index}'`
+
+#### Slack Bus Handling
+
+The converter automatically identifies the slack bus:
+- External grids receive slack weights based on their `slack_weight` attribute
+- Regular generators with `slack=True` also participate in slack distribution
+- The generator with the highest slack weight receives a slack terminal extension
+- All participating generators receive active power control extensions with their distribution keys (droop)
+
+#### Shunt Compensators
+
+Pandapower shunts are converted to linear shunt compensators:
+- Conductance and susceptance calculated from `p_mw` and `q_mvar`
+- Section count based on the `step` attribute
+- Maximum sections from `max_step` attribute
+- Shunt IDs: `'shunt_{bus}_{index}'`
+
+#### Lines
+
+Pandapower lines are converted to PyPowSyBl lines:
+- Resistance and reactance calculated from per-length parameters and line length
+- Shunt conductance and susceptance divided equally between both ends
+- Current limits derived from `max_i_ka` and derating factor (`df`)
+- Parallel lines are properly handled with divided impedances
+- Line IDs: `'{from_bus}_{to_bus}_{index}'`
+
+#### Transformers
+
+Pandapower two-winding transformers are converted:
+- Rated voltages calculated considering tap position and tap side
+- Impedances calculated from short-circuit parameters
+- Magnetizing admittance from no-load parameters
+- Tap changer position considered if present
+- Parallel transformers supported
+- Transformer IDs: `'{hv_bus}_{lv_bus}_{line_count + index}'`
+
+### Limitations
+
+The conversion has some limitations:
+- Three-winding transformers are not currently supported
+- DC lines and HVDC systems are not supported
+- Controllers and automation are not fully preserved
+- Network name defaults to `'network'` if not set in pandapower
+- All elements are placed in a single substation
+
+## Example Usage
+
+### Basic Conversion
+
+```python
+from pypowsybl.network import convert_from_pandapower
+from pypowsybl.loadflow import run_ac
+import pandapower as pp
+import pandapower.networks as pn
+
+# Create or load a pandapower network
+pp_net = pn.case30()
+
+# Convert to PyPowSyBl
+network = convert_from_pandapower(pp_net)
+
+# Run power flow analysis
+results = run_ac(network)
+
+# Access results
+buses = network.get_buses()
+print(buses[['v_mag', 'v_angle']])
+```
+
+### Converting Custom Networks
+
+```python
+import pandapower as pp
+from pypowsybl.network import convert_from_pandapower
+
+# Create a custom pandapower network
+net = pp.create_empty_network(name="My Custom Network")
+
+# Add buses
+bus1 = pp.create_bus(net, vn_kv=110., name="Bus 1")
+bus2 = pp.create_bus(net, vn_kv=110., name="Bus 2")
+bus3 = pp.create_bus(net, vn_kv=20., name="Bus 3")
+
+# Add external grid (slack bus)
+pp.create_ext_grid(net, bus=bus1, vm_pu=1.02, name="Grid Connection")
+
+# Add line
+pp.create_line(net, from_bus=bus1, to_bus=bus2, length_km=10.0,
+               std_type="N2XS(FL)2Y 1x300 RM/35 64/110 kV", name="Line 1-2")
+
+# Add transformer
+pp.create_transformer(net, hv_bus=bus2, lv_bus=bus3, std_type="25 MVA 110/20 kV",
+                      name="Trafo 2-3")
+
+# Add load
+pp.create_load(net, bus=bus3, p_mw=10.0, q_mvar=3.0, name="Load 1")
+
+# Add generator
+pp.create_gen(net, bus=bus2, p_mw=50.0, vm_pu=1.01, name="Generator 1",
+              min_p_mw=0.0, max_p_mw=100.0)
+
+# Convert to PyPowSyBl
+network = convert_from_pandapower(net)
+
+# Inspect the converted network
+print(f"Network name: {network.get_id()}")
+print(f"Voltage levels: {len(network.get_voltage_levels())}")
+print(f"Buses: {len(network.get_buses())}")
+print(f"Lines: {len(network.get_lines())}")
+print(f"Transformers: {len(network.get_2_windings_transformers())}")
+print(f"Loads: {len(network.get_loads())}")
+print(f"Generators: {len(network.get_generators())}")
+```
+
+### Working with IEEE Test Cases
+
+```python
+from pypowsybl.network import convert_from_pandapower
+import pandapower.networks as pn
+
+# Convert various IEEE test cases
+cases = {
+    'IEEE 9': pn.case9(),
+    'IEEE 14': pn.case14(),
+    'IEEE 30': pn.case30(),
+    'IEEE 118': pn.case118()
+}
+
+for name, pp_net in cases.items():
+    network = convert_from_pandapower(pp_net)
+    print(f"\n{name}:")
+    print(f"  Buses: {len(network.get_buses())}")
+    print(f"  Lines: {len(network.get_lines())}")
+    print(f"  Generators: {len(network.get_generators())}")
+    print(f"  Loads: {len(network.get_loads())}")
+```
+
+### Combining with Grid2Op
+
+```python
+from pypowsybl.network import convert_from_pandapower
+from pypowsybl.grid2op import Backend
+import pandapower.networks as pn
+
+# Convert a pandapower network
+pp_net = pn.case14()
+network = convert_from_pandapower(pp_net)
+
+# Use with Grid2Op backend
+with Backend(network, buses_per_voltage_level=2) as backend:
+    # Run power flow
+    results = backend.run_pf(dc=False)
+    
+    for result in results:
+        print(f"Status: {result.status}")
+        print(f"Iterations: {result.iteration_count}")
+```
+
+### Accessing Network Elements
+
+```python
+from pypowsybl.network import convert_from_pandapower
+import pandapower.networks as pn
+
+# Convert network
+pp_net = pn.case9()
+network = convert_from_pandapower(pp_net)
+
+# Access various network elements
+buses = network.get_buses()
+print("Buses:")
+print(buses[['v_mag', 'v_angle', 'voltage_level_id']])
+
+lines = network.get_lines()
+print("\nLines:")
+print(lines[['r', 'x', 'connected1', 'connected2']])
+
+generators = network.get_generators()
+print("\nGenerators:")
+print(generators[['target_p', 'target_v', 'voltage_regulator_on']])
+
+loads = network.get_loads()
+print("\nLoads:")
+print(loads[['p0', 'q0', 'p', 'q']])
+
+transformers = network.get_2_windings_transformers()
+print("\nTransformers:")
+print(transformers[['rated_u1', 'rated_u2', 'r', 'x']])
+```
+
+## Notes
+
+<Note>
+  The pandapower library must be installed to use this conversion function. If pandapower is not installed, the function will raise a `PyPowsyblError`.
+</Note>
+
+<Warning>
+  The converter creates a simplified network structure with all elements in a single substation. Geographical information and detailed substation structure from pandapower are not preserved.
+</Warning>
+
+<Info>
+  Element naming conventions are designed to be compatible with Grid2Op requirements. If elements have explicit names in pandapower, those names are preserved; otherwise, systematic IDs are generated.
+</Info>

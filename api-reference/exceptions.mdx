@@ -1,0 +1,394 @@
+---
+title: 'Exceptions'
+description: 'Error handling and exception classes in PyPowSyBl'
+icon: 'triangle-exclamation'
+---
+
+## Overview
+
+PyPowSyBl uses Python exceptions to signal errors during power system operations. The main exception class is `PyPowsyblError`, which is raised when operations fail due to invalid parameters, computation errors, or network inconsistencies.
+
+## Exception Classes
+
+### PyPowsyblError
+
+The primary exception class for all PyPowSyBl operations. It inherits from Python's standard `Exception` class and is raised for various error conditions including:
+
+- Invalid network data or topology
+- Computation failures (load flow divergence, etc.)
+- Invalid parameter values
+- Missing or incompatible elements
+- File I/O errors
+- Java/native library errors
+
+```python
+from pypowsybl import PyPowsyblError
+import pypowsybl as pp
+
+try:
+    network = pp.network.create_empty("test")
+    # Attempt invalid operation
+    network.update_generators(id='INVALID_GEN', target_p=100.0)
+except PyPowsyblError as e:
+    print(f"Operation failed: {e}")
+```
+
+<ParamField path="message" type="str">
+  Error message describing the failure condition. The message typically includes context about what operation failed and why.
+</ParamField>
+
+#### Common Scenarios
+
+PyPowsyblError is raised in the following situations:
+
+1. **Network Element Errors** - Invalid element IDs, missing references, or incompatible updates
+2. **Computation Failures** - Load flow divergence, solver errors, or numerical issues
+3. **Validation Errors** - Network topology violations or constraint violations
+4. **I/O Errors** - File format issues, parsing errors, or missing files
+5. **Configuration Errors** - Invalid parameters or missing required configuration
+
+## Error Handling Patterns
+
+### Basic Error Handling
+
+Catch and handle PyPowSybl exceptions in your application code:
+
+```python
+import pypowsybl as pp
+from pypowsybl import PyPowsyblError
+
+try:
+    network = pp.network.load("network.xiidm")
+    results = pp.loadflow.run_ac(network)
+except PyPowsyblError as e:
+    print(f"Power system operation failed: {e}")
+    # Handle the error (log, retry, use fallback, etc.)
+```
+
+### Handling Specific Error Types
+
+While PyPowSyBl uses a single exception class, you can differentiate errors by examining the error message:
+
+```python
+import pypowsybl as pp
+from pypowsybl import PyPowsyblError
+
+def safe_network_operation(network, element_id):
+    try:
+        network.update_generators(id=element_id, target_p=100.0)
+    except PyPowsyblError as e:
+        error_msg = str(e)
+        if "not found" in error_msg.lower():
+            print(f"Element {element_id} does not exist")
+        elif "invalid" in error_msg.lower():
+            print(f"Invalid update attempted on {element_id}")
+        else:
+            print(f"Unexpected error: {e}")
+            raise
+```
+
+### Error Handling in Batch Operations
+
+When processing multiple networks or operations, implement robust error handling:
+
+```python
+import pypowsybl as pp
+from pypowsybl import PyPowsyblError
+from pathlib import Path
+
+def process_network_files(file_list):
+    """Process multiple network files with error handling."""
+    results = []
+    errors = []
+    
+    for file_path in file_list:
+        try:
+            network = pp.network.load(file_path)
+            result = pp.loadflow.run_ac(network)
+            results.append({
+                'file': file_path,
+                'status': 'success',
+                'result': result
+            })
+        except PyPowsyblError as e:
+            errors.append({
+                'file': file_path,
+                'status': 'failed',
+                'error': str(e)
+            })
+            print(f"Failed to process {file_path}: {e}")
+    
+    return results, errors
+
+# Usage
+files = ['network1.xiidm', 'network2.xiidm', 'network3.xiidm']
+successful, failed = process_network_files(files)
+print(f"Processed {len(successful)} successfully, {len(failed)} failed")
+```
+
+### Validation Before Operations
+
+Use validation to prevent errors before they occur:
+
+```python
+import pypowsybl as pp
+from pypowsybl import PyPowsyblError
+
+def safe_update_generator(network, gen_id, target_p):
+    """Safely update a generator with validation."""
+    # Check if generator exists
+    generators = network.get_generators()
+    if gen_id not in generators.index:
+        raise ValueError(f"Generator {gen_id} not found in network")
+    
+    # Check target_p bounds
+    gen_data = generators.loc[gen_id]
+    if target_p < gen_data['min_p'] or target_p > gen_data['max_p']:
+        raise ValueError(
+            f"Target power {target_p} outside bounds "
+            f"[{gen_data['min_p']}, {gen_data['max_p']}]"
+        )
+    
+    try:
+        network.update_generators(id=gen_id, target_p=target_p)
+    except PyPowsyblError as e:
+        print(f"Update failed despite validation: {e}")
+        raise
+
+# Usage
+network = pp.network.create_ieee14()
+safe_update_generator(network, 'B1-G', 50.0)
+```
+
+### Graceful Degradation
+
+Implement fallback strategies when operations fail:
+
+```python
+import pypowsybl as pp
+from pypowsybl import PyPowsyblError
+
+def run_loadflow_with_fallback(network):
+    """Run load flow with automatic fallback to DC if AC fails."""
+    try:
+        # Try AC load flow first
+        result = pp.loadflow.run_ac(network)
+        print("AC load flow converged")
+        return result
+    except PyPowsyblError as e:
+        print(f"AC load flow failed: {e}")
+        print("Falling back to DC load flow...")
+        
+        try:
+            result = pp.loadflow.run_dc(network)
+            print("DC load flow succeeded")
+            return result
+        except PyPowsyblError as e:
+            print(f"DC load flow also failed: {e}")
+            raise
+
+# Usage
+network = pp.network.create_ieee14()
+result = run_loadflow_with_fallback(network)
+```
+
+### Using Context Managers
+
+Create context managers for resource cleanup even when errors occur:
+
+```python
+import pypowsybl as pp
+from pypowsybl import PyPowsyblError
+from contextlib import contextmanager
+
+@contextmanager
+def network_context(file_path):
+    """Context manager for network operations with automatic cleanup."""
+    network = None
+    try:
+        network = pp.network.load(file_path)
+        yield network
+    except PyPowsyblError as e:
+        print(f"Error loading or processing network: {e}")
+        raise
+    finally:
+        # Cleanup code (if needed)
+        if network is not None:
+            print("Network processing complete")
+
+# Usage
+try:
+    with network_context('network.xiidm') as network:
+        results = pp.loadflow.run_ac(network)
+        print(f"Load flow results: {results}")
+except PyPowsyblError as e:
+    print(f"Operation failed: {e}")
+```
+
+## Integration with Reports
+
+Combine exception handling with report nodes for comprehensive error diagnostics:
+
+```python
+import pypowsybl as pp
+from pypowsybl import PyPowsyblError, report
+
+def analyze_with_diagnostics(network):
+    """Run analysis with full error diagnostics."""
+    report_node = report.ReportNode(task_key='analysis')
+    
+    try:
+        result = pp.loadflow.run_ac(network, report_node=report_node)
+        return result, report_node
+    except PyPowsyblError as e:
+        # Error occurred - report contains diagnostic information
+        print("Analysis failed with error:", e)
+        print("\nDiagnostic report:")
+        print(report_node)
+        raise
+
+# Usage
+network = pp.network.create_ieee14()
+try:
+    result, analysis_report = analyze_with_diagnostics(network)
+    print("Analysis successful")
+except PyPowsyblError:
+    print("Analysis failed - see diagnostics above")
+```
+
+## Common Error Scenarios
+
+### Invalid Network Element
+
+```python
+from pypowsybl import PyPowsyblError
+import pypowsybl as pp
+
+network = pp.network.create_ieee14()
+
+# This raises PyPowsyblError: element not found
+try:
+    network.update_generators(id='NON_EXISTENT_GEN', target_p=100.0)
+except PyPowsyblError as e:
+    print(f"Error: {e}")
+```
+
+### Invalid Parameter Values
+
+```python
+from pypowsybl import PyPowsyblError
+import pypowsybl as pp
+
+network = pp.network.create_eurostag_tutorial_example1_network()
+
+# This raises PyPowsyblError: invalid regulated element
+try:
+    network.update_generators(id='GEN', regulated_element_id='INVALID_ELEMENT')
+except PyPowsyblError as e:
+    print(f"Error: {e}")
+```
+
+### Load Flow Convergence Failure
+
+```python
+from pypowsybl import PyPowsyblError
+import pypowsybl as pp
+
+network = pp.network.create_ieee14()
+# Modify network to make it unsolvable
+# ... (extreme parameter modifications)
+
+try:
+    result = pp.loadflow.run_ac(network)
+except PyPowsyblError as e:
+    print(f"Load flow failed to converge: {e}")
+```
+
+### File I/O Errors
+
+```python
+from pypowsybl import PyPowsyblError
+import pypowsybl as pp
+
+try:
+    network = pp.network.load("non_existent_file.xiidm")
+except PyPowsyblError as e:
+    print(f"Failed to load network: {e}")
+```
+
+## Best Practices
+
+<Tip>
+  Always catch `PyPowsyblError` when performing operations that might fail, such as network modifications, computations, or I/O operations.
+</Tip>
+
+<Note>
+  Exception messages often contain valuable debugging information. Log them or display them to users to help diagnose issues.
+</Note>
+
+<Warning>
+  PyPowSyblError can wrap errors from the underlying Java implementation. Stack traces may include Java exception information that can help with debugging.
+</Warning>
+
+<Tip>
+  When possible, validate inputs before operations to provide clearer, more user-friendly error messages instead of relying solely on PyPowsyblError.
+</Tip>
+
+## Debugging Tips
+
+### Verbose Error Messages
+
+PyPowsyblError messages typically include:
+- The operation that failed
+- The element or parameter involved
+- The reason for failure
+- Sometimes suggestions for resolution
+
+### Using Reports for Diagnosis
+
+When an exception occurs during computation, the report node may contain additional diagnostic information:
+
+```python
+import pypowsybl as pp
+from pypowsybl import PyPowsyblError, report
+
+network = pp.network.create_ieee14()
+report_node = report.ReportNode()
+
+try:
+    result = pp.loadflow.run_ac(network, report_node=report_node)
+except PyPowsyblError as e:
+    print(f"Exception: {e}")
+    print("\nDetailed report:")
+    print(report_node)  # May contain additional context
+```
+
+### Logging for Production
+
+Set up proper logging for production environments:
+
+```python
+import logging
+import pypowsybl as pp
+from pypowsybl import PyPowsyblError
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+def production_operation(network_file):
+    try:
+        network = pp.network.load(network_file)
+        result = pp.loadflow.run_ac(network)
+        logger.info(f"Successfully processed {network_file}")
+        return result
+    except PyPowsyblError as e:
+        logger.error(f"Failed to process {network_file}: {e}", exc_info=True)
+        raise
+```
+
+## See Also
+
+- [Report](/api-reference/report) - Generating detailed computation reports
+- [Network](/api-reference/network) - Network operations and validation
+- [Load Flow](/api-reference/loadflow) - Load flow computations and error handling
+- [Security Analysis](/api-reference/security) - Security analysis error handling

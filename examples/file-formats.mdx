@@ -1,0 +1,470 @@
+---
+title: File Formats and Import/Export
+description: Learn how to import and export power networks in various formats with PyPowSyBl
+---
+
+PyPowSyBl supports multiple power system file formats for importing and exporting network data. This flexibility allows you to work with data from different sources and tools.
+
+## Supported Import Formats
+
+PyPowSyBl can import networks from the following formats:
+
+```python
+import pypowsybl as pp
+
+# Get list of supported import formats
+formats = pp.network.get_import_formats()
+print("Import formats:", formats)
+# Output: ['BIIDM', 'CGMES', 'IEEE-CDF', 'JIIDM', 'MATPOWER', 'POWER-FACTORY', 'PSS/E', 'UCTE', 'XIIDM']
+
+# Get supported file extensions
+extensions = pp.network.get_import_supported_extensions()
+print("Supported extensions:", extensions)
+# Output: ['RAW', 'RAWX', 'UCT', 'biidm', 'bin', 'dgs', 'iidm', 'jiidm', 'json', 'mat', 'raw', 'rawx', 'txt', 'uct', 'xiidm', 'xml']
+```
+
+## Supported Export Formats
+
+```python
+import pypowsybl as pp
+
+# Get list of supported export formats
+export_formats = pp.network.get_export_formats()
+print("Export formats:", export_formats)
+# Output: ['AMPL', 'BIIDM', 'CGMES', 'JIIDM', 'MATPOWER', 'PSS/E', 'UCTE', 'XIIDM']
+```
+
+## Loading Networks from Files
+
+<Steps>
+  <Step title="Basic file loading">
+    ```python
+    import pypowsybl as pp
+    
+    # Load from XIIDM format (PowSyBl native format)
+    network = pp.network.load('network.xiidm')
+    
+    # Load from other formats
+    network = pp.network.load('network.uct')  # UCTE format
+    network = pp.network.load('network.mat')  # MATPOWER format
+    network = pp.network.load('network.raw')  # PSS/E format
+    ```
+  </Step>
+
+  <Step title="Load with absolute or relative paths">
+    ```python
+    import pypowsybl as pp
+    from pathlib import Path
+    
+    # Relative path
+    network = pp.network.load('data/network.xiidm')
+    
+    # Absolute path
+    network = pp.network.load('/path/to/network.xiidm')
+    
+    # Using pathlib
+    file_path = Path('data') / 'network.xiidm'
+    network = pp.network.load(str(file_path))
+    ```
+  </Step>
+
+  <Step title="Load compressed files">
+    PyPowSyBl automatically handles compressed files:
+    ```python
+    import pypowsybl as pp
+    
+    # Gzip compressed
+    network = pp.network.load('network.xiidm.gz')
+    
+    # Bzip2 compressed
+    network = pp.network.load('network.xiidm.bz2')
+    
+    # Zip archive
+    network = pp.network.load('network.zip')
+    ```
+  </Step>
+</Steps>
+
+<Note>
+  PyPowSyBl automatically detects the format based on the file extension.
+</Note>
+
+## Loading with Import Parameters
+
+Many formats support import parameters for customization:
+
+```python
+import pypowsybl as pp
+
+# View available parameters for a format
+params = pp.network.get_import_parameters('PSS/E')
+print(params)
+# Shows parameters like:
+# - psse.import.ignore-base-voltage
+# - psse.import.ignore-node-breaker-topology
+
+# Load with custom parameters
+network = pp.network.load(
+    'network.raw',
+    parameters={
+        'psse.import.ignore-base-voltage': 'true'
+    }
+)
+```
+
+### CGMES Import Parameters
+
+```python
+import pypowsybl as pp
+
+# View CGMES import parameters
+cgmes_params = pp.network.get_import_parameters('CGMES')
+print(cgmes_params)
+
+# Load CGMES with custom parameters
+network = pp.network.load(
+    'network.zip',
+    parameters={
+        'iidm.import.cgmes.source-for-iidm-id': 'rdfID',
+        'iidm.import.cgmes.profile-used-for-initial-state-values': 'SSH'
+    }
+)
+```
+
+## Loading from Memory
+
+<CodeGroup>
+```python From String
+import pypowsybl as pp
+
+# Load network from string content
+file_content = """
+##C 2007.05.01
+##N
+##ZBE
+BBE1AA1               0 2 400.00 3000.00 0.00000 -1500.0 0.00000 0.00000 -9000.0 9000.00 -9000.0                               F
+"""
+
+network = pp.network.load_from_string('simple-eu.uct', file_content)
+print(f"Loaded {len(network.get_substations())} substations")
+```
+
+```python From Binary Buffer
+import pypowsybl as pp
+import io
+
+# Load from binary buffer (useful for web services)
+with open('network.xiidm', 'rb') as f:
+    buffer = io.BytesIO(f.read())
+    network = pp.network.load_from_binary_buffer(buffer)
+```
+
+```python Multiple CGMES Files
+import pypowsybl as pp
+import io
+
+# Load CGMES from multiple zip files
+with open('CGMES_Partial.zip', 'rb') as f1:
+    with open('Boundary.zip', 'rb') as f2:
+        buffer1 = io.BytesIO(f1.read())
+        buffer2 = io.BytesIO(f2.read())
+        network = pp.network.load_from_binary_buffers([buffer1, buffer2])
+```
+</CodeGroup>
+
+## Checking if a File is Loadable
+
+```python
+import pypowsybl as pp
+
+# Check if file can be loaded
+if pp.network.is_loadable('network.xiidm'):
+    network = pp.network.load('network.xiidm')
+    print("Network loaded successfully")
+else:
+    print("File is not a valid network")
+```
+
+<Tip>
+  Use `is_loadable()` to validate files before loading, especially when dealing with user uploads.
+</Tip>
+
+## Saving Networks
+
+<Steps>
+  <Step title="Save to XIIDM format">
+    ```python
+    import pypowsybl as pp
+    
+    network = pp.network.create_ieee14()
+    
+    # Save to file
+    network.save('output.xiidm', format='XIIDM')
+    ```
+  </Step>
+
+  <Step title="Save to other formats">
+    ```python
+    import pypowsybl as pp
+    
+    network = pp.network.create_ieee14()
+    
+    # Save as UCTE
+    network.save('output.uct', format='UCTE')
+    
+    # Save as MATPOWER
+    network.save('output.mat', format='MATPOWER')
+    
+    # Save as PSS/E
+    network.save('output.raw', format='PSS/E')
+    ```
+  </Step>
+
+  <Step title="Save to string or buffer">
+    ```python
+    import pypowsybl as pp
+    
+    network = pp.network.create_ieee14()
+    
+    # Save to string
+    xml_string = network.save_to_string()
+    
+    # Save to binary buffer
+    buffer = network.save_to_binary_buffer(format='XIIDM')
+    ```
+  </Step>
+</Steps>
+
+## Export Parameters
+
+Customize export behavior with parameters:
+
+```python
+import pypowsybl as pp
+
+# View export parameters for CGMES
+export_params = pp.network.get_export_parameters('CGMES')
+print(export_params)
+
+network = pp.network.create_ieee14()
+
+# Export CGMES with custom parameters
+network.save(
+    'output.zip',
+    format='CGMES',
+    parameters={
+        'iidm.export.cgmes.cim-version': '16',
+        'iidm.export.cgmes.profiles': 'EQ,TP,SSH,SV'
+    }
+)
+```
+
+## Format-Specific Examples
+
+<CodeGroup>
+```python XIIDM Format
+import pypowsybl as pp
+import tempfile
+from pathlib import Path
+
+# XIIDM is PyPowSyBl's native format
+network = pp.network.create_eurostag_tutorial_example1_network()
+
+with tempfile.TemporaryDirectory() as tmpdir:
+    output_file = Path(tmpdir) / 'network.xiidm'
+    
+    # Save to XIIDM
+    network.save(output_file, format='XIIDM')
+    
+    # Load it back
+    loaded_network = pp.network.load(output_file)
+    
+    # Verify round-trip
+    assert loaded_network.save_to_string() == network.save_to_string()
+    print("XIIDM round-trip successful")
+```
+
+```python CGMES Format
+import pypowsybl as pp
+import zipfile
+
+network = pp.network.create_eurostag_tutorial_example1_network()
+
+# Save to CGMES format (creates zip with multiple XML files)
+buffer = network.save_to_binary_buffer(format='CGMES')
+
+# Inspect zip contents
+with zipfile.ZipFile(buffer, 'r') as zip_file:
+    files = zip_file.namelist()
+    print("CGMES files created:", files)
+    # Output: ['file_EQ.xml', 'file_TP.xml', 'file_SV.xml', 'file_SSH.xml']
+```
+
+```python AMPL Format
+import pypowsybl as pp
+import tempfile
+import os
+from pathlib import Path
+
+network = pp.network.create_eurostag_tutorial_example1_network()
+
+with tempfile.TemporaryDirectory() as tmpdir:
+    output_file = Path(tmpdir) / 'network'
+    
+    # AMPL format creates multiple files
+    network.save(output_file, format='AMPL')
+    
+    # List generated files
+    files = os.listdir(tmpdir)
+    print(f"Generated {len(files)} AMPL files:")
+    for f in sorted(files):
+        print(f"  - {f}")
+    # Includes: buses, generators, loads, branches, etc.
+```
+
+```python MATPOWER Format
+import pypowsybl as pp
+import tempfile
+from pathlib import Path
+
+network = pp.network.create_ieee30()
+
+with tempfile.TemporaryDirectory() as tmpdir:
+    output_file = Path(tmpdir) / 'network.mat'
+    
+    # Save as MATPOWER
+    network.save(output_file, format='MATPOWER')
+    
+    # Load it back
+    loaded_network = pp.network.load(output_file)
+    print(f"MATPOWER: {len(loaded_network.get_buses())} buses")
+```
+</CodeGroup>
+
+## Working with CGMES Networks
+
+CGMES (Common Grid Model Exchange Standard) is widely used in European power systems:
+
+```python
+import pypowsybl as pp
+import io
+
+# Load CGMES from zip file
+with open('CGMES_Full.zip', 'rb') as f:
+    network = pp.network.load_from_binary_buffer(io.BytesIO(f.read()))
+    print(f"Loaded {len(network.get_substations())} substations")
+
+# Update network with additional CGMES files
+network.update_from_file('load_SSH.xml')
+
+# Export back to CGMES
+network.save('output_cgmes.zip', format='CGMES')
+```
+
+## Import Post-Processors
+
+Post-processors can modify networks during import:
+
+```python
+import pypowsybl as pp
+
+# List available post-processors
+post_processors = pp.network.get_import_post_processors()
+print("Available post-processors:", post_processors)
+# Output: ['geoJsonImporter', 'loadflowResultsCompletion', 'replaceTieLinesByLines']
+
+# Load with post-processor
+network = pp.network.load(
+    'network.zip',
+    post_processors=['replaceTieLinesByLines']
+)
+```
+
+## Batch Processing Multiple Files
+
+```python
+import pypowsybl as pp
+from pathlib import Path
+import pandas as pd
+
+# Process all network files in a directory
+input_dir = Path('input_networks')
+output_dir = Path('output_networks')
+output_dir.mkdir(exist_ok=True)
+
+results = []
+
+for file in input_dir.glob('*.xiidm'):
+    try:
+        # Load network
+        network = pp.network.load(str(file))
+        
+        # Perform analysis (e.g., load flow)
+        lf_result = pp.loadflow.run_ac(network)
+        
+        # Save results
+        output_file = output_dir / f"{file.stem}_processed.xiidm"
+        network.save(str(output_file), format='XIIDM')
+        
+        results.append({
+            'file': file.name,
+            'buses': len(network.get_buses()),
+            'converged': lf_result[0].status.name == 'CONVERGED',
+            'status': 'success'
+        })
+    except Exception as e:
+        results.append({
+            'file': file.name,
+            'status': 'error',
+            'error': str(e)
+        })
+
+# Summary report
+df_results = pd.DataFrame(results)
+print(df_results)
+```
+
+## Format Conversion Example
+
+```python
+import pypowsybl as pp
+from pathlib import Path
+
+def convert_network(input_file, output_format):
+    """
+    Convert a network file to a different format.
+    """
+    # Load the network
+    network = pp.network.load(input_file)
+    
+    # Determine output filename
+    input_path = Path(input_file)
+    ext_map = {
+        'XIIDM': '.xiidm',
+        'CGMES': '.zip',
+        'UCTE': '.uct',
+        'MATPOWER': '.mat',
+        'AMPL': '_ampl'
+    }
+    output_file = input_path.with_suffix(ext_map.get(output_format, '.out'))
+    
+    # Save in new format
+    network.save(str(output_file), format=output_format)
+    print(f"Converted {input_file} to {output_file}")
+    
+    return output_file
+
+# Example usage
+convert_network('network.uct', 'XIIDM')
+convert_network('network.xiidm', 'CGMES')
+```
+
+<Tip>
+  When converting between formats, some data may be lost if the target format doesn't support all features. Always validate the converted network.
+</Tip>
+
+## Next Steps
+
+- Explore [IEEE Networks](/examples/ieee-networks) for ready-to-use test cases
+- Learn [Network Modification](/examples/network-modification) techniques
+- Try [Grid2Op Integration](/examples/grid2op-integration) for advanced use cases

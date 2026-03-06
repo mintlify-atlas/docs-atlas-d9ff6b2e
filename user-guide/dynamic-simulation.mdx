@@ -1,0 +1,411 @@
+---
+title: Dynamic Simulation
+description: Run time-domain simulations with Dynawo to study system stability
+---
+
+Dynamic simulation analyzes how power systems respond to disturbances over time. It's essential for stability studies, protection coordination, and renewable integration analysis.
+
+<Note>
+  PyPowSyBl currently supports the [Dynawo](https://dynawo.github.io) simulator for dynamic simulations.
+</Note>
+
+## Overview
+
+Dynamic simulation requires:
+
+1. **Network**: Static network model
+2. **Dynamic models**: Behavior models for generators, loads, etc.
+3. **Events**: Disturbances to simulate (faults, disconnections)
+4. **Output variables**: Quantities to monitor (curves, final values)
+
+## Prerequisites
+
+### Install Dynawo
+
+Download and install Dynawo from [dynawo.github.io](https://dynawo.github.io).
+
+### Configure PyPowSyBl
+
+Add Dynawo configuration to `~/.itools/config.yml`:
+
+```yaml
+dynamic-simulation-default-parameters:
+    startTime: 0
+    stopTime: 30
+
+dynawo:
+    homeDir: /path/to/dynawo
+    debug: true
+
+dynawo-simulation-default-parameters:
+    parametersFile: ./models.par
+    network.parametersFile: ./network.par
+    network.parametersId: "1"
+    solver.type: IDA
+    solver.parametersFile: ./solver.par
+    solver.parametersId: "1"
+```
+
+## Getting Started
+
+Import the module:
+
+```python
+import pypowsybl as pp
+import pypowsybl.dynamic as dyn
+from pandas import DataFrame
+```
+
+## Dynamic Models
+
+Map static network elements to dynamic behavior models:
+
+```python
+# Create model mapping
+model_mapping = dyn.ModelMapping()
+
+# Add load with alpha-beta model
+model_mapping.add_base_load(
+    static_id='LOAD',
+    parameter_set_id='LAB',  # ID in models.par file
+    model_name='LoadAlphaBeta'
+)
+
+# Add generator with dataframe
+gen_df = DataFrame.from_records(
+    index='static_id',
+    columns=['static_id', 'parameter_set_id', 'model_name'],
+    data=[('GEN', 'GENPV', 'GeneratorPV')]
+)
+model_mapping.add_synchronized_generator(gen_df)
+
+# Or use generic method
+model_mapping.add_dynamic_model(
+    category_name='SynchronizedGenerator',
+    static_id='GEN2',
+    parameter_set_id='GENPQ',
+    model_name='GeneratorPQ'
+)
+```
+
+### Available Model Categories
+
+- `BaseLoad`: Static and dynamic loads
+- `SynchronizedGenerator`: Synchronous machines
+- `CurrentLimitAutomaton`: Protection devices
+- `OverloadManagementSystem`: Load shedding schemes
+
+<Note>
+  The `parameter_set_id` must match an ID in your Dynawo parameter files (typically `models.par`).
+</Note>
+
+## Event Mapping
+
+Define disturbances to simulate:
+
+```python
+# Create event mapping
+event_mapping = dyn.EventMapping()
+
+# Disconnect generator at t=10s
+event_mapping.add_disconnection(
+    static_id='GEN',
+    start_time=10
+)
+
+# Disconnect one side of a line
+event_mapping.add_event_model(
+    event_name='Disconnect',
+    static_id='NHV1_NHV2_1',
+    start_time=10,
+    disconnect_only='ONE'  # Disconnect side ONE only
+)
+```
+
+### Event Types
+
+- `Disconnect`: Disconnect equipment
+- `Step`: Step change in load/generation
+- Other events depend on Dynawo models
+
+## Output Variables
+
+Specify what to monitor during simulation:
+
+```python
+variables_mapping = dyn.OutputVariableMapping()
+
+# Record curves (time series)
+variables_mapping.add_dynamic_model_curves(
+    'DM_LOAD',  # Dynamic model ID
+    ['load_PPu', 'load_QPu']  # Variable names
+)
+
+# Record final state values
+variables_mapping.add_standard_model_final_state_values(
+    'NGEN',  # Model ID
+    'Upu_value'  # Variable name
+)
+```
+
+## Running Simulation
+
+<Steps>
+  <Step title="Load network">
+    ```python
+    network = pp.network.create_eurostag_tutorial_example1_network()
+    ```
+  </Step>
+  
+  <Step title="Create mappings">
+    ```python
+    model_mapping = dyn.ModelMapping()
+    # ... add models
+    
+    event_mapping = dyn.EventMapping()
+    # ... add events
+    
+    variables_mapping = dyn.OutputVariableMapping()
+    # ... add variables
+    ```
+  </Step>
+  
+  <Step title="Configure parameters">
+    ```python
+    params = dyn.Parameters(start_time=0, stop_time=50)
+    ```
+  </Step>
+  
+  <Step title="Run simulation">
+    ```python
+    sim = dyn.Simulation()
+    results = sim.run(
+        network,
+        model_mapping,
+        event_mapping,
+        variables_mapping,
+        params
+    )
+    ```
+  </Step>
+</Steps>
+
+## Analyzing Results
+
+```python
+# Check simulation status
+print(results.status())  # SUCCESS or FAILURE
+
+# Get error description if failed
+if results.status() == 'FAILURE':
+    print(results.status_text())
+
+# Get time series curves
+curves_df = results.curves()
+print(curves_df)
+
+# Get final state values
+final_values_df = results.final_state_values()
+print(final_values_df)
+
+# Get simulation timeline
+timeline_df = results.timeline()
+print(timeline_df)
+```
+
+### Curves DataFrame
+
+Contains time series data:
+
+```python
+curves_df = results.curves()
+# Columns: time, variable1, variable2, ...
+# Index: time steps
+
+# Plot results
+import matplotlib.pyplot as plt
+
+curves_df.plot(x='time', y='load_PPu')
+plt.xlabel('Time (s)')
+plt.ylabel('Active Power (pu)')
+plt.title('Load Response')
+plt.show()
+```
+
+## Complete Example
+
+```python
+import pypowsybl as pp
+import pypowsybl.dynamic as dyn
+from pandas import DataFrame
+
+# 1. Load network
+network = pp.network.create_eurostag_tutorial_example1_network()
+
+# 2. Dynamic models
+model_mapping = dyn.ModelMapping()
+
+model_mapping.add_base_load(
+    static_id='LOAD',
+    parameter_set_id='LAB',
+    model_name='LoadAlphaBeta'
+)
+
+gen_df = DataFrame.from_records(
+    index='static_id',
+    columns=['static_id', 'parameter_set_id', 'model_name'],
+    data=[
+        ('GEN', 'GENPV', 'GeneratorPV'),
+        ('GEN2', 'GENPQ', 'GeneratorPQ')
+    ]
+)
+model_mapping.add_synchronized_generator(gen_df)
+
+# 3. Events
+event_mapping = dyn.EventMapping()
+event_mapping.add_disconnection(static_id='GEN', start_time=10)
+event_mapping.add_event_model(
+    event_name='Disconnect',
+    static_id='NHV1_NHV2_1',
+    start_time=15,
+    disconnect_only='ONE'
+)
+
+# 4. Output variables
+variables_mapping = dyn.OutputVariableMapping()
+variables_mapping.add_dynamic_model_curves(
+    'DM_LOAD',
+    ['load_PPu', 'load_QPu']
+)
+variables_mapping.add_standard_model_final_state_values(
+    'NGEN',
+    'Upu_value'
+)
+
+# 5. Parameters
+params = dyn.Parameters(start_time=0, stop_time=50)
+
+# 6. Run simulation
+sim = dyn.Simulation()
+results = sim.run(
+    network,
+    model_mapping,
+    event_mapping,
+    variables_mapping,
+    params
+)
+
+# 7. Analyze
+print(f"Status: {results.status()}")
+if results.status() == 'SUCCESS':
+    curves = results.curves()
+    print(curves.head())
+    
+    # Plot
+    import matplotlib.pyplot as plt
+    curves.plot(x='time', y=['load_PPu', 'load_QPu'])
+    plt.xlabel('Time (s)')
+    plt.ylabel('Power (pu)')
+    plt.title('Load Response to Generator Trip')
+    plt.legend(['Active Power', 'Reactive Power'])
+    plt.grid(True)
+    plt.show()
+else:
+    print(f"Error: {results.status_text()}")
+```
+
+## Parameters
+
+Configure simulation time and settings:
+
+```python
+params = dyn.Parameters(
+    start_time=0,       # Simulation start (seconds)
+    stop_time=100,      # Simulation end (seconds)
+    precision=1e-6      # Solver precision (optional)
+)
+```
+
+## Common Dynamic Models
+
+<Accordion title="Generator Models">
+  - **GeneratorPV**: PV generator (voltage control)
+  - **GeneratorPQ**: PQ generator (no voltage control)
+  - **SynchronousGenerator**: Detailed synchronous machine
+  - **WindGenerator**: Wind turbine models
+</Accordion>
+
+<Accordion title="Load Models">
+  - **LoadAlphaBeta**: Voltage-dependent load
+  - **LoadRestorativeWithLimits**: Load with restoration
+  - **LoadPQ**: Constant PQ load
+</Accordion>
+
+<Accordion title="Control Models">
+  - **AVR**: Automatic voltage regulator
+  - **Governor**: Speed/power governor
+  - **PSS**: Power system stabilizer
+  - **HVDC**: HVDC control
+</Accordion>
+
+## Troubleshooting
+
+<Accordion title="Simulation fails to start">
+  Check:
+  - Dynawo installation path in config.yml
+  - Parameter file paths and IDs
+  - Model compatibility with network elements
+  - Initial network state (run loadflow first)
+</Accordion>
+
+<Accordion title="Solver errors">
+  Try:
+  - Reduce precision requirement
+  - Adjust solver type (IDA, SIM)
+  - Check for algebraic loops
+  - Verify initial conditions
+</Accordion>
+
+<Accordion title="Missing variables in output">
+  Ensure:
+  - Variable names match Dynawo model names
+  - Dynamic model IDs are correct
+  - Models are properly initialized
+</Accordion>
+
+## Use Cases
+
+<Accordion title="Transient Stability">
+  Study system response to:
+  - Generator trips
+  - Transmission line faults
+  - Load changes
+  - Verify stability margins
+</Accordion>
+
+<Accordion title="Renewable Integration">
+  Analyze:
+  - Wind/solar plant behavior
+  - Low-inertia system response
+  - Frequency stability
+  - Voltage control
+</Accordion>
+
+<Accordion title="Protection Studies">
+  Evaluate:
+  - Relay operation timing
+  - Protection coordination
+  - Under-frequency load shedding
+  - Special protection schemes
+</Accordion>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Network Visualization" icon="chart-network" href="/user-guide/network-visualization">
+    Visualize simulation results
+  </Card>
+  <Card title="Per Unit" icon="calculator" href="/user-guide/per-unit">
+    Understand per-unit calculations
+  </Card>
+</CardGroup>

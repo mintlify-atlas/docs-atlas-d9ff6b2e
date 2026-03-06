@@ -1,0 +1,293 @@
+---
+title: IEEE Test Networks
+description: Learn how to create and work with standard IEEE test networks in PyPowSyBl
+---
+
+PyPowSyBl provides built-in IEEE standard test networks that are commonly used for power system analysis, testing, and benchmarking. These networks are ready to use without any external files.
+
+## Available IEEE Networks
+
+PyPowSyBl includes six IEEE standard test networks:
+
+- **IEEE 9-bus** - Small 3-generator system
+- **IEEE 14-bus** - Classic test case with 5 generators
+- **IEEE 30-bus** - Medium-sized system
+- **IEEE 57-bus** - Larger test system
+- **IEEE 118-bus** - Complex transmission system
+- **IEEE 300-bus** - Large-scale test network
+
+## Creating IEEE Networks
+
+<Steps>
+  <Step title="Import PyPowSyBl">
+    ```python
+    import pypowsybl as pp
+    ```
+  </Step>
+
+  <Step title="Create an IEEE network">
+    Use the appropriate `create_ieee*` function:
+    ```python
+    # Create IEEE 14-bus network
+    network = pp.network.create_ieee14()
+    
+    # Or any other IEEE network
+    network_9 = pp.network.create_ieee9()
+    network_30 = pp.network.create_ieee30()
+    network_57 = pp.network.create_ieee57()
+    network_118 = pp.network.create_ieee118()
+    network_300 = pp.network.create_ieee300()
+    ```
+  </Step>
+
+  <Step title="Explore the network">
+    ```python
+    # Get basic information
+    print(f"Network ID: {network.id}")
+    print(f"Substations: {len(network.get_substations())}")
+    print(f"Buses: {len(network.get_buses())}")
+    print(f"Generators: {len(network.get_generators())}")
+    print(f"Loads: {len(network.get_loads())}")
+    print(f"Lines: {len(network.get_lines())}")
+    ```
+  </Step>
+</Steps>
+
+## Working with IEEE 14-Bus Network
+
+The IEEE 14-bus system is one of the most popular test cases. Here's a complete example:
+
+```python
+import pypowsybl as pp
+import pandas as pd
+
+# Create the network
+network = pp.network.create_ieee14()
+
+# View generators
+generators = network.get_generators()
+print("\nGenerators:")
+print(generators[['bus_id', 'target_p', 'target_v', 'max_p']])
+
+# View loads
+loads = network.get_loads()
+print("\nLoads:")
+print(loads[['bus_id', 'p0', 'q0']])
+
+# Run a power flow
+results = pp.loadflow.run_ac(network)
+print(f"\nLoadflow converged: {results[0].status}")
+
+# Check bus voltages after loadflow
+buses = network.get_buses()
+print("\nBus Voltages:")
+print(buses[['v_mag', 'v_angle']])
+```
+
+<Note>
+  All IEEE networks are created with realistic parameters and are ready for power flow analysis.
+</Note>
+
+## Analyzing Network Components
+
+<CodeGroup>
+```python Generators
+import pypowsybl as pp
+
+network = pp.network.create_ieee14()
+
+# Get all generators
+gens = network.get_generators()
+print(f"Total generators: {len(gens)}")
+
+# Analyze generator capacity
+total_capacity = gens['max_p'].sum()
+print(f"Total generation capacity: {total_capacity:.2f} MW")
+
+# Find the largest generator
+largest_gen = gens.loc[gens['max_p'].idxmax()]
+print(f"Largest generator: {largest_gen.name}")
+print(f"Capacity: {largest_gen['max_p']:.2f} MW")
+```
+
+```python Loads
+import pypowsybl as pp
+
+network = pp.network.create_ieee14()
+
+# Get all loads
+loads = network.get_loads()
+
+# Calculate total demand
+total_p = loads['p0'].sum()
+total_q = loads['q0'].sum()
+print(f"Total active power demand: {total_p:.2f} MW")
+print(f"Total reactive power demand: {total_q:.2f} MVAr")
+
+# Load distribution by voltage level
+load_by_vl = loads.groupby('voltage_level_id')['p0'].sum()
+print("\nLoad distribution:")
+print(load_by_vl)
+```
+
+```python Lines and Transformers
+import pypowsybl as pp
+
+network = pp.network.create_ieee14()
+
+# Get transmission lines
+lines = network.get_lines()
+print(f"Number of lines: {len(lines)}")
+
+# Get transformers
+transformers = network.get_2_windings_transformers()
+print(f"Number of transformers: {len(transformers)}")
+
+# Analyze line impedances
+avg_r = lines['r'].mean()
+avg_x = lines['x'].mean()
+print(f"\nAverage line resistance: {avg_r:.4f} p.u.")
+print(f"Average line reactance: {avg_x:.4f} p.u.")
+```
+</CodeGroup>
+
+## Power Flow Analysis Example
+
+Perform a complete power flow analysis on an IEEE network:
+
+```python
+import pypowsybl as pp
+import pandas as pd
+
+# Create IEEE 30-bus network
+network = pp.network.create_ieee30()
+
+# Run AC power flow
+print("Running AC power flow...")
+results = pp.loadflow.run_ac(network)
+
+if results[0].status.name == 'CONVERGED':
+    print("Power flow converged successfully!\n")
+    
+    # Get line flows
+    lines = network.get_lines()
+    print("Line Flows:")
+    print(lines[['p1', 'q1', 'p2', 'q2', 'i1', 'i2']])
+    
+    # Calculate losses
+    total_losses = (lines['p1'] + lines['p2']).sum()
+    print(f"\nTotal active power losses: {total_losses:.2f} MW")
+    
+    # Check voltage violations
+    buses = network.get_buses()
+    v_min, v_max = 0.95, 1.05
+    violations = buses[(buses['v_mag'] < v_min) | (buses['v_mag'] > v_max)]
+    
+    if len(violations) > 0:
+        print(f"\nVoltage violations detected at {len(violations)} buses")
+    else:
+        print("\nAll bus voltages within limits")
+else:
+    print(f"Power flow did not converge: {results[0].status}")
+```
+
+## Comparing Different Network Sizes
+
+Compare characteristics across different IEEE networks:
+
+```python
+import pypowsybl as pp
+import pandas as pd
+
+# Create multiple networks
+networks = {
+    'IEEE-9': pp.network.create_ieee9(),
+    'IEEE-14': pp.network.create_ieee14(),
+    'IEEE-30': pp.network.create_ieee30(),
+    'IEEE-57': pp.network.create_ieee57(),
+}
+
+# Collect statistics
+stats = []
+for name, net in networks.items():
+    stats.append({
+        'Network': name,
+        'Buses': len(net.get_buses()),
+        'Generators': len(net.get_generators()),
+        'Loads': len(net.get_loads()),
+        'Lines': len(net.get_lines()),
+        'Transformers': len(net.get_2_windings_transformers()),
+    })
+
+# Display comparison
+df_stats = pd.DataFrame(stats)
+print(df_stats.to_string(index=False))
+```
+
+<Tip>
+  IEEE networks are perfect for:
+  - Testing new algorithms
+  - Validating simulation results
+  - Learning power system analysis
+  - Benchmarking performance
+</Tip>
+
+## Using IEEE Networks for Sensitivity Analysis
+
+```python
+import pypowsybl as pp
+
+# Create IEEE 14-bus network
+network = pp.network.create_ieee14()
+
+# Run initial power flow
+pp.loadflow.run_ac(network)
+
+# Perform sensitivity analysis
+# Define sensitivity factors
+factor_matrix = pp.sensitivity.create_dc_analysis()
+factor_matrix.add_branch_flow_factor_matrix(
+    branches_ids=network.get_lines().index.tolist()[:5],
+    variables_ids=network.get_generators().index.tolist()
+)
+
+# Run sensitivity analysis
+results = factor_matrix.run(network)
+
+# Display sensitivity values
+print("Branch Flow Sensitivities:")
+print(results.get_branch_flows_sensitivity_matrix())
+```
+
+## Modifying IEEE Networks
+
+You can modify IEEE networks for custom scenarios:
+
+```python
+import pypowsybl as pp
+
+# Create base network
+network = pp.network.create_ieee14()
+
+# Increase load at specific buses
+loads = network.get_loads()
+loads_df = loads.copy()
+loads_df['p0'] = loads_df['p0'] * 1.2  # 20% increase
+network.update_loads(loads_df)
+
+# Modify generator limits
+gens = network.get_generators()
+gens_df = gens.copy()
+gens_df['max_p'] = gens_df['max_p'] * 1.1  # 10% increase
+network.update_generators(gens_df)
+
+# Run power flow with modified network
+results = pp.loadflow.run_ac(network)
+print(f"Modified network power flow: {results[0].status}")
+```
+
+## Next Steps
+
+- Learn about [File Formats](/examples/file-formats) for importing/exporting networks
+- Explore [Network Modification](/examples/network-modification) techniques
+- Try [Grid2Op Integration](/examples/grid2op-integration) for reinforcement learning

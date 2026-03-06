@@ -1,0 +1,342 @@
+---
+title: 'Dynamic Simulation'
+description: 'API reference for dynamic simulation module'
+---
+
+## Overview
+
+The dynamic simulation module provides time-domain simulation capabilities using the Dynawo solver. It allows you to model dynamic behavior of power systems including generators, loads, transformers, and events.
+
+## Main Classes
+
+### Simulation
+
+Main class for running dynamic simulations.
+
+```python
+from pypowsybl.dynamic import Simulation
+
+simulation = Simulation()
+```
+
+#### Methods
+
+<ParamField path="run" type="method">
+  Run the dynamic simulation.
+
+  **Parameters:**
+  - `network` (Network): The network to simulate
+  - `model_mapping` (ModelMapping): Mapping of network elements to dynamic models
+  - `event_mapping` (EventMapping, optional): Events to simulate
+  - `timeseries_mapping` (OutputVariableMapping, optional): Output variables to record
+  - `parameters` (Parameters, optional): Simulation parameters
+  - `report_node` (ReportNode, optional): Report node for logging
+
+  **Returns:** SimulationResult
+</ParamField>
+
+<ParamField path="get_provider_parameters_names" type="static method">
+  Get list of parameters for Dynawo provider.
+
+  **Returns:** List[str] - List of parameter names
+</ParamField>
+
+<ParamField path="get_provider_parameters" type="static method">
+  Get supported dynamic simulation specific parameters.
+
+  **Returns:** DataFrame - Dynamic simulation parameters dataframe
+</ParamField>
+
+### Parameters
+
+Parameters for dynamic simulation execution.
+
+```python
+from pypowsybl.dynamic import Parameters
+
+params = Parameters(
+    start_time=0.0,
+    stop_time=100.0,
+    provider_parameters={'parametersFile': 'models.par'}
+)
+```
+
+<ParamField path="start_time" type="float">
+  Instant of time at which the dynamic simulation begins, in seconds
+</ParamField>
+
+<ParamField path="stop_time" type="float">
+  Instant of time at which the dynamic simulation ends, in seconds
+</ParamField>
+
+<ParamField path="provider_parameters" type="Dict[str, str]">
+  Parameters linked to the dynamic simulation provider (Dynawo)
+</ParamField>
+
+### ModelMapping
+
+Class to map network elements to their respective dynamic behavior models.
+
+```python
+from pypowsybl.dynamic import ModelMapping
+
+model_mapping = ModelMapping()
+```
+
+#### Key Methods
+
+<ParamField path="add_base_load" type="method">
+  Add a load mapping.
+
+  **Parameters:**
+  - `df` (DataFrame, optional): Attributes as a dataframe
+  - `static_id` (str): ID of the network element to map
+  - `parameter_set_id` (str): ID of the parameter set in Dynawo configuration
+  - `model_name` (str, optional): Name of the model (default model used if not specified)
+
+  **Example:**
+  ```python
+  model_mapping.add_base_load(
+      static_id='LOAD',
+      parameter_set_id='lab',
+      model_name='LoadPQ'
+  )
+  ```
+</ParamField>
+
+<ParamField path="add_base_generator" type="method">
+  Add a base generator mapping.
+
+  **Example:**
+  ```python
+  model_mapping.add_base_generator(
+      static_id='GEN',
+      parameter_set_id='gen',
+      model_name='GeneratorFictitious'
+  )
+  ```
+</ParamField>
+
+<ParamField path="add_synchronous_generator" type="method">
+  Add a synchronous generator mapping with detailed dynamic models.
+
+  **Example:**
+  ```python
+  model_mapping.add_synchronous_generator(
+      static_id='GEN',
+      parameter_set_id='ssgen',
+      model_name='GeneratorSynchronousThreeWindings'
+  )
+  ```
+</ParamField>
+
+<ParamField path="add_base_transformer" type="method">
+  Add a transformer mapping.
+
+  **Example:**
+  ```python
+  model_mapping.add_base_transformer(
+      static_id='TFO',
+      parameter_set_id='tfo',
+      model_name='TransformerFixedRatio'
+  )
+  ```
+</ParamField>
+
+<ParamField path="add_hvdc_p" type="method">
+  Add an HVDC P mapping for HVDC lines.
+</ParamField>
+
+<ParamField path="get_categories_names" type="method">
+  Get the dynamic model categories.
+
+  **Returns:** List[str] - List of category names
+</ParamField>
+
+<ParamField path="get_supported_models" type="method">
+  Get supported dynamic models for a given category.
+
+  **Parameters:**
+  - `category_name` (str): Dynamic model category name
+
+  **Returns:** List[str] - List of supported model names
+</ParamField>
+
+### EventMapping
+
+Class to map events that occur during simulation.
+
+```python
+from pypowsybl.dynamic import EventMapping
+
+event_mapping = EventMapping()
+```
+
+#### Methods
+
+<ParamField path="add_disconnection" type="method">
+  Create an equipment disconnection event.
+
+  **Parameters:**
+  - `static_id` (str): ID of the network element to disconnect
+  - `start_time` (float): Timestep at which the event happens
+  - `disconnect_only` (str, optional): Side to disconnect for branch equipment ('ONE' or 'TWO')
+
+  **Example:**
+  ```python
+  event_mapping.add_disconnection(
+      static_id='LINE',
+      start_time=3.3,
+      disconnect_only='TWO'
+  )
+  ```
+</ParamField>
+
+<ParamField path="add_active_power_variation" type="method">
+  Create an active power variation event on generator or load.
+
+  **Parameters:**
+  - `static_id` (str): ID of the load or generator
+  - `start_time` (float): Timestep at which the event happens
+  - `delta_p` (float): Active power variation
+
+  **Example:**
+  ```python
+  event_mapping.add_active_power_variation(
+      static_id='LOAD',
+      start_time=14,
+      delta_p=2
+  )
+  ```
+</ParamField>
+
+<ParamField path="add_node_fault" type="method">
+  Create a bus node fault event.
+
+  **Parameters:**
+  - `static_id` (str): ID of the bus
+  - `start_time` (float): Event start time
+  - `fault_time` (float): Duration of fault
+  - `r_pu` (float): Resistance in per unit
+  - `x_pu` (float): Reactance in per unit
+
+  **Example:**
+  ```python
+  event_mapping.add_node_fault(
+      static_id='BUS',
+      start_time=12,
+      fault_time=2,
+      r_pu=0.1,
+      x_pu=0.2
+  )
+  ```
+</ParamField>
+
+### OutputVariableMapping
+
+Class to map curves and final state values for output.
+
+```python
+from pypowsybl.dynamic import OutputVariableMapping, OutputVariableType
+
+output_mapping = OutputVariableMapping()
+```
+
+<ParamField path="add_dynamic_model_curves" type="method">
+  Add curves mapping on a dynamic model.
+
+  **Parameters:**
+  - `dynamic_model_id` (str): ID of the dynamic model
+  - `variables` (List[str] or str): Variable names to record
+</ParamField>
+
+<ParamField path="add_standard_model_curves" type="method">
+  Add curves mapping on network equipment without dynamic model.
+
+  **Parameters:**
+  - `static_id` (str): ID of the network equipment
+  - `variables` (List[str] or str): Variable names to record
+</ParamField>
+
+### SimulationResult
+
+Result object returned by simulation run.
+
+<ResponseField name="status" type="method">
+  Status of the simulation (SUCCESS or FAILURE)
+
+  **Returns:** DynamicSimulationStatus
+</ResponseField>
+
+<ResponseField name="status_text" type="method">
+  Status text of the simulation (failure description or empty if success)
+
+  **Returns:** str
+</ResponseField>
+
+<ResponseField name="curves" type="method">
+  Dataframe of the curves results.
+
+  **Returns:** DataFrame - Columns are curve names, rows are timesteps
+</ResponseField>
+
+<ResponseField name="final_state_values" type="method">
+  Dataframe of final state values results.
+
+  **Returns:** DataFrame - First column is FSV names, second is values
+</ResponseField>
+
+<ResponseField name="timeline" type="method">
+  Dataframe of the simulation timeline.
+
+  **Returns:** DataFrame - Event time, model name, and event message
+</ResponseField>
+
+## Complete Example
+
+```python
+import pypowsybl as pp
+from pypowsybl.dynamic import Simulation, Parameters, ModelMapping, EventMapping
+
+# Create network
+network = pp.network.create_eurostag_tutorial_example1_network()
+
+# Configure model mapping
+model_mapping = ModelMapping()
+model_mapping.add_base_generator(
+    static_id='GEN',
+    parameter_set_id='gen',
+    model_name='GeneratorFictitious'
+)
+model_mapping.add_base_load(
+    static_id='LOAD',
+    parameter_set_id='load',
+    model_name='LoadPQ'
+)
+
+# Configure events
+event_mapping = EventMapping()
+event_mapping.add_disconnection(
+    static_id='LINE1',
+    start_time=5.0
+)
+
+# Set parameters
+parameters = Parameters(
+    start_time=0.0,
+    stop_time=100.0
+)
+
+# Run simulation
+simulation = Simulation()
+result = simulation.run(
+    network=network,
+    model_mapping=model_mapping,
+    event_mapping=event_mapping,
+    parameters=parameters
+)
+
+# Check results
+print(result.status())
+print(result.curves())
+```

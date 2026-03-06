@@ -1,0 +1,307 @@
+---
+title: Load Flow Analysis
+description: Run AC and DC load flow calculations on power networks
+---
+
+The `loadflow` module allows you to run power flow calculations on networks to determine voltage magnitudes, phase angles, and power flows.
+
+## Getting Started
+
+Import the necessary modules:
+
+```python
+import pypowsybl as pp
+import pypowsybl.network as pn
+import pypowsybl.loadflow as lf
+```
+
+## Providers
+
+PyPowSyBl supports multiple load flow implementations:
+
+```python
+# List available providers
+lf.get_provider_names()
+# ['DynaFlow', 'OpenLoadFlow']
+
+# Check default provider
+lf.get_default_provider()
+# 'OpenLoadFlow'
+```
+
+### Available Providers
+
+<Accordion title="OpenLoadFlow (Default)">
+  Fully open-source load flow implementation supporting:
+  - AC Newton-Raphson method
+  - Linear DC calculation
+  - Advanced features like distributed slack, voltage control
+  
+  [Documentation](https://powsybl.readthedocs.io/projects/powsybl-open-loadflow/en/latest/)
+</Accordion>
+
+<Accordion title="DynaFlow">
+  Steady-state simulation using simplified time-domain simulation from the Dynawo project.
+  
+  [Configuration Guide](https://powsybl.readthedocs.io/projects/powsybl-dynawo/en/latest/)
+</Accordion>
+
+## Parameters
+
+Configure load flow behavior with parameters:
+
+```python
+# View default parameters
+params = lf.Parameters()
+print(params)
+```
+
+### Key Parameters
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `voltage_init_mode` | UNIFORM_VALUES | How voltages are initialized |
+| `transformer_voltage_control_on` | False | Enable transformer voltage control |
+| `use_reactive_limits` | True | Respect generator reactive limits |
+| `phase_shifter_regulation_on` | False | Enable phase shifter regulation |
+| `distributed_slack` | True | Distribute slack across generators |
+| `balance_type` | PROPORTIONAL_TO_GENERATION_P_MAX | How to balance power |
+| `dc_use_transformer_ratio` | True | Include transformer ratios in DC |
+
+### Example Configuration
+
+```python
+params = lf.Parameters(
+    distributed_slack=False,
+    transformer_voltage_control_on=True,
+    use_reactive_limits=True
+)
+```
+
+## Provider-Specific Parameters
+
+Providers may support additional parameters:
+
+```python
+# List provider-specific parameters
+lf.get_provider_parameters_names()
+# ['slackBusSelectionMode', 'slackBusesIds', 'lowImpedanceBranchMode', ...]
+
+# Get detailed parameter information
+params_df = lf.get_provider_parameters()
+print(params_df.query('name == "slackBusSelectionMode"'))
+```
+
+<Warning>
+  Provider parameters must be strings in the `provider_parameters` dictionary:
+  
+  ```python
+  # Correct
+  params = lf.Parameters(provider_parameters={
+      'slackBusSelectionMode': 'NAME',
+      'slackBusesIds': 'VLHV2_0',
+      'someDoubleParam': '1.23',  # Use string for numbers
+      'someBoolParam': 'true'      # Use 'true' or 'false'
+  })
+  ```
+</Warning>
+
+## AC Load Flow
+
+Run an AC load flow using the Newton-Raphson method:
+
+<Steps>
+  <Step title="Create or load a network">
+    ```python
+    network = pn.create_eurostag_tutorial_example1_network()
+    ```
+  </Step>
+  
+  <Step title="Configure parameters">
+    ```python
+    params = lf.Parameters(distributed_slack=False)
+    ```
+  </Step>
+  
+  <Step title="Run the load flow">
+    ```python
+    results = lf.run_ac(network, parameters=params)
+    ```
+  </Step>
+  
+  <Step title="Analyze results">
+    ```python
+    # Check convergence status
+    print(results[0].status)  # CONVERGED
+    
+    # Check iterations
+    print(results[0].iteration_count)  # 3
+    
+    # Check active power mismatch
+    print(results[0].slack_bus_results[0].active_power_mismatch)
+    ```
+  </Step>
+</Steps>
+
+### Component Results
+
+The result contains information for each connected component:
+
+```python
+for component in results:
+    print(f"Component {component.connected_component_num}:")
+    print(f"  Status: {component.status}")
+    print(f"  Iterations: {component.iteration_count}")
+    print(f"  Reference bus: {component.reference_bus_id}")
+    for slack in component.slack_bus_results:
+        print(f"  Slack bus {slack.id}: {slack.active_power_mismatch:.2f} MW")
+```
+
+### Network State After Load Flow
+
+The main output is updated network data:
+
+```python
+# Get voltage magnitudes
+voltages = network.get_buses().v_mag.round(2)
+print(voltages)
+
+# Get line flows
+lines = network.get_lines()[['p1', 'q1', 'p2', 'q2']]
+print(lines)
+
+# Get generator outputs
+gens = network.get_generators()[['p', 'q', 'target_p', 'target_q']]
+print(gens)
+```
+
+## DC Load Flow
+
+Run a linearized DC load flow (faster, less accurate):
+
+```python
+# Configure DC parameters
+params = lf.Parameters(
+    dc_use_transformer_ratio=False,
+    distributed_slack=True,
+    balance_type=lf.BalanceType.PROPORTIONAL_TO_GENERATION_P_MAX
+)
+
+# Run DC load flow
+network = pn.create_eurostag_tutorial_example1_network()
+results = lf.run_dc(network, params)
+
+# View flows (only active power in DC)
+lines = network.get_lines()[['p1', 'p2']]
+print(lines)
+```
+
+<Note>
+  DC load flow:
+  - Only calculates active power flows
+  - Assumes all voltages at 1.0 pu
+  - Ignores reactive power and losses
+  - Much faster than AC for large networks
+</Note>
+
+## Balance Types
+
+Control how power imbalances are distributed:
+
+```python
+from pypowsybl.loadflow import BalanceType
+
+# Available balance types
+BalanceType.PROPORTIONAL_TO_GENERATION_P_MAX  # Default
+BalanceType.PROPORTIONAL_TO_GENERATION_P
+BalanceType.PROPORTIONAL_TO_LOAD
+BalanceType.PROPORTIONAL_TO_CONFORM_LOAD
+
+# Example usage
+params = lf.Parameters(
+    distributed_slack=True,
+    balance_type=BalanceType.PROPORTIONAL_TO_LOAD
+)
+```
+
+## Reports
+
+Get detailed computation information:
+
+```python
+report_node = pp.report.ReportNode()
+network = pn.create_eurostag_tutorial_example1_network()
+results = lf.run_ac(network, report_node=report_node)
+
+print(report_node)
+# Output shows:
+# - Network balance
+# - Slack bus selection
+# - Outer loop iterations
+# - Convergence status
+```
+
+## Asynchronous API
+
+Run multiple load flows concurrently:
+
+```python
+import asyncio
+
+# Load network with multi-thread support
+network = pn.create_ieee14(allow_variant_multi_thread_access=True)
+
+# Create variants
+network.clone_variant('InitialState', 'variant1')
+network.clone_variant('InitialState', 'variant2')
+
+# Define async function
+async def run_parallel_loadflows():
+    lf1 = lf.run_ac_async(network, 'variant1')
+    lf2 = lf.run_ac_async(network, 'variant2')
+    results = await asyncio.gather(lf1, lf2)
+    print(results[0][0].status)
+    print(results[1][0].status)
+
+# Run
+asyncio.run(run_parallel_loadflows())
+```
+
+<Warning>
+  Networks must be created with `allow_variant_multi_thread_access=True` for concurrent variant access.
+</Warning>
+
+## Troubleshooting
+
+<Accordion title="Load flow did not converge">
+  Common causes:
+  - Network islands (disconnected components)
+  - Voltage collapse
+  - Infeasible reactive power limits
+  - Bad initial conditions
+  
+  Try:
+  - Check network connectivity
+  - Relax reactive limits: `use_reactive_limits=False`
+  - Adjust voltage initialization
+  - Enable distributed slack
+</Accordion>
+
+<Accordion title="Results show NaN values">
+  NaN values indicate:
+  - Elements in disconnected components
+  - Convergence issues
+  
+  Check the component results and network topology.
+</Accordion>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Security Analysis" icon="shield" href="/user-guide/security-analysis">
+    Analyze N-1 contingencies
+  </Card>
+  <Card title="Sensitivity Analysis" icon="chart-line" href="/user-guide/sensitivity-analysis">
+    Calculate power transfer factors
+  </Card>
+</CardGroup>

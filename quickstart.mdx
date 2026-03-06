@@ -1,80 +1,256 @@
 ---
 title: "Quickstart"
-description: "Start building awesome documentation in minutes"
+description: "Get started with PyPowSyBl in minutes"
 ---
 
-## Get started in three steps
+This quickstart guide will help you perform your first power flow calculation using PyPowSyBl. You'll learn how to create a network, run a load flow, and inspect the results.
 
-Get your documentation site running locally and make your first customization.
+## Prerequisites
 
-### Step 1: Set up your local environment
+Make sure you have PyPowSyBl installed. If not, follow the [installation guide](/installation).
 
-<AccordionGroup>
-  <Accordion icon="copy" title="Clone your docs locally">
-    During the onboarding process, you created a GitHub repository with your docs content if you didn't already have one. You can find a link to this repository in your [dashboard](https://dashboard.mintlify.com).
+```bash
+pip install pypowsybl
+```
+
+## Your First Load Flow
+
+<Steps>
+  <Step title="Import PyPowSyBl">
+    Start by importing PyPowSyBl in your Python script or notebook:
+
+    ```python
+    import pypowsybl as pp
+    ```
+  </Step>
+
+  <Step title="Create a network">
+    PyPowSyBl provides built-in test networks. Let's create the IEEE 14-bus test network:
+
+    ```python
+    network = pp.network.create_ieee14()
+    ```
+
+    This creates a standard IEEE 14-bus network that's commonly used for testing power system algorithms.
+  </Step>
+
+  <Step title="Run a load flow calculation">
+    Now, run an AC load flow calculation on the network:
+
+    ```python
+    results = pp.loadflow.run_ac(network)
+    print(results)
+    ```
+
+    You should see output similar to:
     
-    To clone the repository locally so that you can make and preview changes to your docs, follow the [Cloning a repository](https://docs.github.com/en/repositories/creating-and-managing-repositories/cloning-a-repository) guide in the GitHub docs.
-  </Accordion>
-  <Accordion icon="rectangle-terminal" title="Start the preview server">
-    1. Install the Mintlify CLI: `npm i -g mint`
-    2. Navigate to your docs directory and run: `mint dev`
-    3. Open `http://localhost:3000` to see your docs live!
-    
-    <Tip>Your preview updates automatically as you edit files.</Tip>
-  </Accordion>
-</AccordionGroup>
+    ```
+    [ComponentResult(connected_component_num=0, synchronous_component_num=0, 
+    status=CONVERGED, status_text=CONVERGED, iteration_count=3, 
+    reference_bus_id='VL1_0', 
+    slack_bus_results=[SlackBusResult(id='VL1_0', active_power_mismatch=-0.006730108618313579)], 
+    distributed_active_power=0.0)]
+    ```
 
-### Step 2: Deploy your changes
+    <Note>
+    The `status=CONVERGED` indicates that the load flow calculation successfully converged to a solution.
+    </Note>
+  </Step>
 
-<AccordionGroup>
-  <Accordion icon="github" title="Install our GitHub app">
-    Install the Mintlify GitHub app from your [dashboard](https://dashboard.mintlify.com/settings/organization/github-app).
-    
-    Our GitHub app automatically deploys your changes to your docs site, so you don't need to manage deployments yourself.
-</Accordion>
-<Accordion icon="palette" title="Update your site name and colors">
-    For a first change, let's update the name and colors of your docs site.
+  <Step title="Inspect the results">
+    After the load flow, you can extract network data as Pandas DataFrames. For example, to get bus voltages:
 
-    1. Open `docs.json` in your editor.
-    2. Change the `"name"` field to your project name.
-    3. Update the `"colors"` to match your brand.
-    4. Save and see your changes instantly at `http://localhost:3000`.
+    ```python
+    buses = network.get_buses()
+    print(buses)
+    ```
 
-    <Tip>Try changing the primary color to see an immediate difference!</Tip>
-  </Accordion>
-</AccordionGroup>
+    This returns a DataFrame with voltage magnitudes and angles:
 
-### Step 3: Go live
+    ```
+            v_mag  v_angle
+    VL1_0   1.060     0.00
+    VL2_0   1.045    -4.98
+    VL3_0   1.010   -12.72
+    VL4_0   1.019   -10.33
+    VL5_0   1.020    -8.78
+    VL6_0   1.070   -14.22
+    VL7_0   1.062   -13.37
+    VL8_0   1.090   -13.36
+    VL9_0   1.056   -14.94
+    VL10_0  1.051   -15.10
+    VL11_0  1.057   -14.79
+    VL12_0  1.055   -15.07
+    VL13_0  1.050   -15.16
+    VL14_0  1.036   -16.04
+    ```
+  </Step>
+</Steps>
 
-<Accordion icon="rocket" title="Publish your docs">
-  1. Commit and push your changes.
-  2. Your docs will update and be live in moments!
-</Accordion>
+## Complete Example
 
-## Next steps
+Here's the complete working example:
 
-Now that you have your docs running, explore these key features:
+```python
+import pypowsybl as pp
+
+# Create a network
+network = pp.network.create_ieee14()
+
+# Run AC load flow
+results = pp.loadflow.run_ac(network)
+print(results)
+
+# Get bus voltages
+buses = network.get_buses()
+print(buses)
+
+# Get generators data
+generators = network.get_generators()
+print(generators)
+
+# Get lines data
+lines = network.get_lines()
+print(lines)
+```
+
+## Working with Different Network Types
+
+### Creating Networks
+
+PyPowSyBl supports multiple ways to create or load networks:
+
+<CodeGroup>
+
+```python Built-in test networks
+# IEEE test networks
+network = pp.network.create_ieee14()
+network = pp.network.create_ieee30()
+
+# Eurostag tutorial examples
+network = pp.network.create_eurostag_tutorial_example1_network()
+
+# Empty network
+network = pp.network.create_empty("my_network")
+```
+
+```python Load from file
+# Load from various formats (XIIDM, CGMES, MATPOWER, UCTE, etc.)
+network = pp.network.load('path/to/network.xiidm')
+
+# Load CGMES from ZIP
+network = pp.network.load('path/to/CGMES.zip')
+```
+
+```python Load from string
+# Load network from string content
+file_content = """
+##C 2007.05.01
+##N
+##ZBE
+BBE1AA1               0 2 400.00 3000.00 0.00000 -1500.0 0.00000 0.00000 -9000.0 9000.00 -9000.0                               F
+"""
+network = pp.network.load_from_string('simple-eu.uct', file_content)
+```
+
+</CodeGroup>
+
+### Running Load Flow with Parameters
+
+You can customize the load flow calculation with parameters:
+
+```python
+import pypowsybl.loadflow as lf
+
+# Create custom parameters
+parameters = lf.Parameters(
+    distributed_slack=False,
+    dc_use_transformer_ratio=True
+)
+
+# Run load flow with parameters
+results = lf.run_ac(network, parameters)
+```
+
+### DC Load Flow
+
+For faster calculations, you can run a DC load flow:
+
+```python
+# Run DC load flow
+parameters = lf.Parameters(distributed_slack=False)
+results = pp.loadflow.run_dc(network, parameters)
+```
+
+## Extracting Network Elements
+
+PyPowSyBl provides methods to extract various network elements as Pandas DataFrames:
+
+<CodeGroup>
+
+```python Buses
+# Get all buses with voltage data
+buses = network.get_buses()
+```
+
+```python Generators
+# Get all generators
+generators = network.get_generators()
+```
+
+```python Lines
+# Get all lines
+lines = network.get_lines()
+```
+
+```python Loads
+# Get all loads
+loads = network.get_loads()
+```
+
+```python Substations
+# Get all substations
+substations = network.get_substations()
+```
+
+</CodeGroup>
+
+All methods return Pandas DataFrames, making it easy to analyze and visualize your power system data.
+
+## What's Next?
+
+PyPowSyBl offers much more than basic load flow calculations:
 
 <CardGroup cols={2}>
+  <Card title="Security Analysis" icon="shield-halved">
+    Perform N-1 security analysis and contingency simulations
+  </Card>
 
-<Card title="Write Content" icon="pen-to-square" href="/essentials/markdown">
-  Learn MDX syntax and start writing your documentation.
-</Card>
+  <Card title="Sensitivity Analysis" icon="sliders">
+    Calculate sensitivity factors for network analysis
+  </Card>
 
-<Card title="Customize style" icon="palette" href="/essentials/settings">
-  Make your docs match your brand perfectly.
-</Card>
+  <Card title="Network Formats" icon="file-code">
+    Work with CGMES, MATPOWER, UCTE, and other formats
+  </Card>
 
-<Card title="Add code examples" icon="square-code" href="/essentials/code">
-  Include syntax-highlighted code blocks.
-</Card>
-
-<Card title="API documentation" icon="code" href="/api-reference/introduction">
-  Auto-generate API docs from OpenAPI specs.
-</Card>
-
+  <Card title="Visualization" icon="diagram-project">
+    Generate substation and network diagrams
+  </Card>
 </CardGroup>
 
 <Note>
-  **Need help?** See our [full documentation](https://mintlify.com/docs) or join our [community](https://mintlify.com/community).
+For more examples and advanced features, check out the [PyPowSyBl notebooks repository](https://github.com/powsybl/pypowsybl-notebooks).
 </Note>
+
+## Getting Help
+
+<CardGroup cols={2}>
+  <Card title="Documentation" icon="book" href="https://pypowsybl.readthedocs.io/">
+    Full API reference and detailed guides
+  </Card>
+
+  <Card title="Slack Community" icon="slack" href="https://join.slack.com/t/powsybl/shared_invite/zt-36jvd725u-cnquPgZb6kpjH8SKh~FWHQ">
+    Join the PowSyBl community on Slack
+  </Card>
+</CardGroup>

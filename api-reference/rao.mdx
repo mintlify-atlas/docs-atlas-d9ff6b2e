@@ -1,0 +1,380 @@
+---
+title: 'Remedial Action Optimization (RAO)'
+description: 'API reference for RAO module'
+---
+
+## Overview
+
+The Remedial Action Optimization (RAO) module provides advanced optimization capabilities for power system security management. It optimizes the use of remedial actions to ensure network security while minimizing costs.
+
+## Main Classes
+
+### Rao
+
+Main class for running remedial action optimization.
+
+```python
+from pypowsybl.rao import create_rao
+
+rao = create_rao()
+```
+
+#### Methods
+
+<ParamField path="run" type="method">
+  Run a remedial action optimization.
+
+  **Parameters:**
+  - `crac` (Crac): CRAC (Contingency list, Remedial Actions and additional Constraints)
+  - `network` (Network): Network to optimize
+  - `parameters` (Parameters, optional): RAO parameters
+  - `rao_provider` (str): RAO provider name (default: "SearchTreeRao")
+  - `loop_flow_glsk` (Glsk, optional): Loop flow GLSK for loop flow computation
+
+  **Returns:** RaoResult
+
+  **Example:**
+  ```python
+  result = rao.run(
+      crac=crac,
+      network=network,
+      parameters=params,
+      loop_flow_glsk=glsk
+  )
+  ```
+</ParamField>
+
+<ParamField path="run_voltage_monitoring" type="method">
+  Run voltage monitoring after RAO.
+
+  **Parameters:**
+  - `crac` (Crac): CRAC object
+  - `network` (Network): Network
+  - `rao_result` (RaoResult): Result from previous RAO run
+  - `load_flow_parameters` (loadflow.Parameters, optional): Load flow parameters
+  - `provider_str` (str): Provider string
+  - `monitoring_glsk` (Glsk, optional): GLSK for monitoring
+
+  **Returns:** RaoResult
+</ParamField>
+
+<ParamField path="run_angle_monitoring" type="method">
+  Run angle monitoring after RAO.
+
+  **Parameters:**
+  - `crac` (Crac): CRAC object
+  - `network` (Network): Network
+  - `rao_result` (RaoResult): Result from previous RAO run
+  - `load_flow_parameters` (loadflow.Parameters, optional): Load flow parameters
+  - `provider_str` (str): Provider string
+  - `monitoring_glsk` (Glsk, optional): GLSK for monitoring
+
+  **Returns:** RaoResult
+</ParamField>
+
+### Crac
+
+Represents the CRAC (Contingency list, Remedial Actions and additional Constraints) data.
+
+```python
+from pypowsybl.rao import Crac
+
+# Load from file
+crac = Crac.from_file_source(network, 'crac.json')
+
+# Load from buffer
+import io
+with open('crac.json', 'rb') as f:
+    crac = Crac.from_buffer_source(network, io.BytesIO(f.read()))
+```
+
+<ParamField path="from_file_source" type="classmethod">
+  Load CRAC from a file.
+
+  **Parameters:**
+  - `network` (Network): Network object
+  - `crac_file` (str or PathLike): Path to CRAC file
+
+  **Returns:** Crac
+</ParamField>
+
+<ParamField path="from_buffer_source" type="classmethod">
+  Load CRAC from a buffer.
+
+  **Parameters:**
+  - `network` (Network): Network object
+  - `crac_source` (BytesIO): CRAC data buffer
+
+  **Returns:** Crac
+</ParamField>
+
+### Glsk
+
+Represents Generation and Load Shift Keys for sensitivity analysis.
+
+```python
+from pypowsybl.rao import Glsk
+```
+
+Used in RAO for loop flow computation and monitoring.
+
+### Parameters
+
+Comprehensive parameters for RAO execution.
+
+```python
+from pypowsybl.rao import (
+    Parameters,
+    ObjectiveFunctionParameters,
+    RangeActionOptimizationParameters,
+    TopoOptimizationParameters
+)
+
+params = Parameters(
+    objective_function_parameters=ObjectiveFunctionParameters(),
+    range_action_optimization_parameters=RangeActionOptimizationParameters(),
+    topo_optimization_parameters=TopoOptimizationParameters()
+)
+```
+
+<ParamField path="objective_function_parameters" type="ObjectiveFunctionParameters">
+  Parameters for the objective function.
+</ParamField>
+
+<ParamField path="range_action_optimization_parameters" type="RangeActionOptimizationParameters">
+  Parameters for range action optimization (PST, HVDC, injections).
+</ParamField>
+
+<ParamField path="topo_optimization_parameters" type="TopoOptimizationParameters">
+  Parameters for topological action optimization.
+</ParamField>
+
+<ParamField path="multithreading_parameters" type="MultithreadingParameters">
+  Parameters for parallel execution.
+</ParamField>
+
+<ParamField path="second_preventive_rao_parameters" type="SecondPreventiveRaoParameters">
+  Parameters for second preventive RAO execution.
+</ParamField>
+
+<ParamField path="not_optimized_cnecs_parameters" type="NotOptimizedCnecsParameters">
+  Parameters for CNECs that should not be optimized.
+</ParamField>
+
+<ParamField path="loadflow_and_sensitivity_parameters" type="LoadFlowAndSensitivityParameters">
+  Load flow and sensitivity computation parameters.
+</ParamField>
+
+<ParamField path="provider_parameters" type="Dict[str, str]">
+  Provider-specific parameters.
+</ParamField>
+
+#### Loading and Saving Parameters
+
+<ParamField path="from_file_source" type="classmethod">
+  Load parameters from a file.
+
+  **Parameters:**
+  - `parameters_file` (str or PathLike): Path to parameters file
+
+  **Returns:** Parameters
+
+  **Example:**
+  ```python
+  params = Parameters.from_file_source('rao_params.json')
+  ```
+</ParamField>
+
+<ParamField path="from_buffer_source" type="classmethod">
+  Load parameters from a buffer.
+
+  **Parameters:**
+  - `parameters_source` (BytesIO): Parameters data buffer
+
+  **Returns:** Parameters
+</ParamField>
+
+<ParamField path="serialize" type="method">
+  Save parameters to a file.
+
+  **Parameters:**
+  - `output_file` (str): Output file path
+
+  **Example:**
+  ```python
+  params.serialize('output_params.json')
+  ```
+</ParamField>
+
+<ParamField path="serialize_to_binary_buffer" type="method">
+  Serialize parameters to a binary buffer.
+
+  **Returns:** BytesIO
+</ParamField>
+
+<ParamField path="to_json" type="method">
+  Convert parameters to JSON dictionary.
+
+  **Returns:** Dict[str, Any]
+</ParamField>
+
+### ObjectiveFunctionParameters
+
+Parameters for the RAO objective function.
+
+**Attributes:**
+- `objective_function_type`: Type of objective function
+- `unit`: Unit for optimization (MW, AMPERE)
+- `curative_min_obj_improvement`: Minimum improvement required for curative actions
+- `enforce_curative_security`: Whether to enforce security in curative perimeter
+
+### RangeActionOptimizationParameters
+
+Parameters for optimizing range actions (PST, HVDC, injections).
+
+**Key Attributes:**
+- `max_mip_iterations`: Maximum iterations for MIP solver
+- `pst_ra_min_impact_threshold`: Minimum impact threshold for PST actions
+- `pst_sensitivity_threshold`: Sensitivity threshold for PST
+- `pst_model`: PST model type
+- `hvdc_ra_min_impact_threshold`: Minimum impact threshold for HVDC actions
+- `injection_ra_min_impact_threshold`: Minimum impact threshold for injection actions
+- `ra_range_shrinking`: Range shrinking strategy
+- `solver`: Solver to use (e.g., "CBC", "SCIP")
+- `relative_mip_gap`: Relative MIP gap tolerance
+- `solver_specific_parameters`: Solver-specific parameters
+
+### TopoOptimizationParameters
+
+Parameters for topological action optimization.
+
+**Key Attributes:**
+- `max_preventive_search_tree_depth`: Maximum depth for preventive search tree
+- `max_curative_search_tree_depth`: Maximum depth for curative search tree
+- `predefined_combinations`: Use predefined action combinations
+- `relative_min_impact_threshold`: Relative minimum impact threshold
+- `absolute_min_impact_threshold`: Absolute minimum impact threshold
+- `skip_actions_far_from_most_limiting_element`: Skip actions far from constraints
+- `max_number_of_boundaries_for_skipping_actions`: Max boundaries for action skipping
+
+### MultithreadingParameters
+
+Parameters for parallel execution.
+
+**Attributes:**
+- `available_cpus`: Number of CPUs available for parallel computation
+
+### RaoResult
+
+Result object returned by RAO execution.
+
+```python
+# RaoResult is returned by rao.run()
+result = rao.run(crac=crac, network=network, parameters=params)
+```
+
+## Utility Functions
+
+<ParamField path="create_rao" type="function">
+  Create a RAO object for running optimization.
+
+  **Returns:** Rao
+
+  **Example:**
+  ```python
+  from pypowsybl.rao import create_rao
+  
+  rao = create_rao()
+  ```
+</ParamField>
+
+### RaoLogFilter
+
+Filter for RAO log messages.
+
+```python
+from pypowsybl.rao import RaoLogFilter
+import logging
+
+# Create filter to show only OpenRAO logs
+filter = RaoLogFilter()
+```
+
+<ParamField path="filter" type="method">
+  Filter log records to show only OpenRAO package logs.
+
+  **Parameters:**
+  - `record` (LogRecord): Log record to filter
+
+  **Returns:** bool - True if record should be displayed
+</ParamField>
+
+## Complete Example
+
+```python
+import pypowsybl as pp
+from pypowsybl.rao import (
+    create_rao,
+    Crac,
+    Parameters,
+    RangeActionOptimizationParameters
+)
+
+# Load network
+network = pp.network.load('network.xiidm')
+
+# Load CRAC
+crac = Crac.from_file_source(network, 'crac.json')
+
+# Configure parameters
+range_params = RangeActionOptimizationParameters()
+range_params.max_mip_iterations = 10
+range_params.solver = "CBC"
+
+params = Parameters(
+    range_action_optimization_parameters=range_params
+)
+
+# Create and run RAO
+rao = create_rao()
+result = rao.run(
+    crac=crac,
+    network=network,
+    parameters=params,
+    rao_provider="SearchTreeRao"
+)
+
+# Process results
+print(f"RAO optimization completed")
+print(f"Result: {result}")
+```
+
+## Parameter File Example
+
+```json
+{
+  "objective-function": {
+    "type": "MAX_MIN_MARGIN_IN_MEGAWATT",
+    "curative-min-obj-improvement": 0.0,
+    "enforce-curative-security": true
+  },
+  "range-actions-optimization": {
+    "max-mip-iterations": 10,
+    "pst-sensitivity-threshold": 0.01,
+    "solver": "CBC",
+    "relative-mip-gap": 0.001
+  },
+  "topological-actions-optimization": {
+    "max-preventive-search-tree-depth": 5,
+    "max-curative-search-tree-depth": 3,
+    "relative-minimum-impact-threshold": 0.01
+  }
+}
+```
+
+## Notes
+
+- RAO requires a valid CRAC file defining contingencies, CNECs, and remedial actions
+- The SearchTreeRao provider is the default and most commonly used
+- Parameters can be loaded from JSON files or configured programmatically
+- GLSK files are optional but required for loop flow computation

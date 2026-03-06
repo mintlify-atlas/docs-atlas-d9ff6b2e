@@ -1,0 +1,396 @@
+---
+title: 'Load Flow'
+description: 'AC and DC load flow analysis for power networks'
+---
+
+## Overview
+
+The Load Flow module provides functions to run AC and DC power flow calculations on power networks. Load flow analysis computes the steady-state voltages, currents, and power flows in the network.
+
+## Running Load Flow
+
+### run_ac
+
+Run an AC load flow on a network.
+
+```python
+pp.loadflow.run_ac(
+    network: Network,
+    parameters: Parameters = None,
+    provider: str = '',
+    report_node: ReportNode = None
+) -> List[ComponentResult]
+```
+
+<ParamField path="network" type="Network" required>
+  The network on which to run the load flow
+</ParamField>
+
+<ParamField path="parameters" type="Parameters">
+  Load flow parameters to customize the calculation
+</ParamField>
+
+<ParamField path="provider" type="str" default="">
+  The load flow implementation provider. If empty, uses the default provider
+</ParamField>
+
+<ParamField path="report_node" type="ReportNode">
+  Reporter to create an execution report
+</ParamField>
+
+<ResponseField name="return" type="List[ComponentResult]">
+  A list of component results, one for each component of the network
+</ResponseField>
+
+**Example:**
+
+```python
+import pypowsybl as pp
+
+network = pp.network.create_ieee14()
+results = pp.loadflow.run_ac(network)
+
+for result in results:
+    print(f"Component {result.component_num}: {result.status}")
+    print(f"  Iterations: {result.iteration_count}")
+    print(f"  Slack bus active power: {result.slack_bus_active_power_mismatch}")
+```
+
+### run_dc
+
+Run a DC load flow on a network.
+
+```python
+pp.loadflow.run_dc(
+    network: Network,
+    parameters: Parameters = None,
+    provider: str = '',
+    report_node: ReportNode = None
+) -> List[ComponentResult]
+```
+
+Parameters are identical to `run_ac`. DC load flow is a simplified calculation that assumes:
+- All voltages are at nominal values
+- Only active power flows are calculated
+- Line resistances and reactive power are ignored
+
+**Example:**
+
+```python
+import pypowsybl as pp
+
+network = pp.network.create_ieee14()
+results = pp.loadflow.run_dc(network)
+```
+
+### run_ac_async
+
+Run an AC load flow asynchronously.
+
+```python
+pp.loadflow.run_ac_async(
+    network: Network,
+    variant_id: str = 'InitialState',
+    parameters: Parameters = None,
+    provider: str = '',
+    report_node: ReportNode = None
+) -> Future
+```
+
+<ParamField path="network" type="Network" required>
+  The network on which to run the load flow
+</ParamField>
+
+<ParamField path="variant_id" type="str" default="InitialState">
+  The variant ID to use for the calculation
+</ParamField>
+
+<ParamField path="parameters" type="Parameters">
+  Load flow parameters
+</ParamField>
+
+<ParamField path="provider" type="str" default="">
+  The load flow implementation provider
+</ParamField>
+
+<ParamField path="report_node" type="ReportNode">
+  Reporter for execution reports
+</ParamField>
+
+<ResponseField name="return" type="Future">
+  A future that will contain the list of component results
+</ResponseField>
+
+## Parameters
+
+### Parameters Class
+
+The `Parameters` class configures load flow calculations.
+
+```python
+pp.loadflow.Parameters(
+    voltage_init_mode: VoltageInitMode = None,
+    transformer_voltage_control_on: bool = None,
+    use_reactive_limits: bool = None,
+    phase_shifter_regulation_on: bool = None,
+    twt_split_shunt_admittance: bool = None,
+    shunt_compensator_voltage_control_on: bool = None,
+    read_slack_bus: bool = None,
+    write_slack_bus: bool = None,
+    distributed_slack: bool = None,
+    balance_type: BalanceType = None,
+    dc_use_transformer_ratio: bool = None,
+    countries_to_balance: list = None,
+    component_mode: ComponentMode = None,
+    dc_power_factor: float = None,
+    hvdc_ac_emulation: bool = None,
+    provider_parameters: dict = None
+)
+```
+
+<ParamField path="voltage_init_mode" type="VoltageInitMode">
+  Resolution starting point:
+  - `UNIFORM_VALUES`: Flat start (all voltages at 1.0 pu)
+  - `DC_VALUES`: Use DC load flow results as starting point
+</ParamField>
+
+<ParamField path="transformer_voltage_control_on" type="bool">
+  Enable transformer voltage control simulation. The initial tap position is used as the starting point
+</ParamField>
+
+<ParamField path="use_reactive_limits" type="bool">
+  Whether to enforce reactive power limits on generators
+</ParamField>
+
+<ParamField path="phase_shifter_regulation_on" type="bool">
+  Enable phase shifter regulation simulation
+</ParamField>
+
+<ParamField path="shunt_compensator_voltage_control_on" type="bool">
+  Enable voltage control of shunt compensators
+</ParamField>
+
+<ParamField path="distributed_slack" type="bool">
+  Distribute active power slack across the network. When True, active power mismatch is distributed according to balance_type
+</ParamField>
+
+<ParamField path="balance_type" type="BalanceType">
+  How to distribute active power slack:
+  - `PROPORTIONAL_TO_LOAD`: Distribute on loads
+  - `PROPORTIONAL_TO_GENERATION_P_MAX`: Distribute on generators proportional to Pmax
+  - `PROPORTIONAL_TO_GENERATION_P`: Distribute on generators proportional to current P
+</ParamField>
+
+<ParamField path="component_mode" type="ComponentMode">
+  Which network components to compute:
+  - `MAIN_SYNCHRONOUS`: Only main synchronous component
+  - `MAIN_CONNECTED`: Only main connected component
+  - `ALL_CONNECTED`: All connected components
+</ParamField>
+
+<ParamField path="dc_use_transformer_ratio" type="bool">
+  In DC mode, whether to include transformer ratios in the calculation
+</ParamField>
+
+<ParamField path="dc_power_factor" type="float">
+  Power factor used to convert current limits to active power limits in DC calculations
+</ParamField>
+
+<ParamField path="hvdc_ac_emulation" type="bool">
+  Enable AC emulation of HVDC links
+</ParamField>
+
+<ParamField path="provider_parameters" type="dict">
+  Provider-specific parameters as key-value pairs
+</ParamField>
+
+**Example:**
+
+```python
+import pypowsybl as pp
+from pypowsybl.loadflow import VoltageInitMode, BalanceType
+
+parameters = pp.loadflow.Parameters(
+    voltage_init_mode=VoltageInitMode.DC_VALUES,
+    transformer_voltage_control_on=True,
+    use_reactive_limits=True,
+    distributed_slack=True,
+    balance_type=BalanceType.PROPORTIONAL_TO_GENERATION_P_MAX
+)
+
+network = pp.network.create_ieee14()
+results = pp.loadflow.run_ac(network, parameters=parameters)
+```
+
+## Results
+
+### ComponentResult
+
+Represents the result of a load flow calculation for one network component.
+
+<ParamField path="component_num" type="int" readonly>
+  The component number
+</ParamField>
+
+<ParamField path="status" type="ComponentStatus" readonly>
+  The status of the calculation:
+  - `CONVERGED`: Calculation converged successfully
+  - `MAX_ITERATION_REACHED`: Maximum iterations reached
+  - `FAILED`: Calculation failed
+</ParamField>
+
+<ParamField path="iteration_count" type="int" readonly>
+  Number of iterations performed
+</ParamField>
+
+<ParamField path="slack_bus_active_power_mismatch" type="float" readonly>
+  Active power mismatch at the slack bus (in MW)
+</ParamField>
+
+<ParamField path="slack_bus_id" type="str" readonly>
+  ID of the slack bus
+</ParamField>
+
+### SlackBusResult
+
+Detailed information about the slack bus.
+
+<ParamField path="id" type="str" readonly>
+  ID of the slack bus
+</ParamField>
+
+<ParamField path="active_power_mismatch" type="float" readonly>
+  Active power mismatch (in MW)
+</ParamField>
+
+## Validation
+
+### run_validation
+
+Validate that network data is consistent with AC load flow equations.
+
+```python
+pp.loadflow.run_validation(
+    network: Network,
+    validation_types: List[ValidationType] = None,
+    validation_parameters: ValidationParameters = None
+) -> ValidationResult
+```
+
+<ParamField path="network" type="Network" required>
+  The network to validate
+</ParamField>
+
+<ParamField path="validation_types" type="List[ValidationType]">
+  Types of data to check. If None, all types are checked:
+  - `BUSES`: Bus voltage and phase validation
+  - `FLOWS`: Branch flow validation
+  - `GENERATORS`: Generator validation
+  - `SVCS`: Static VAR compensator validation
+  - `SHUNTS`: Shunt compensator validation
+  - `TWTS`: Two-winding transformer validation
+  - `TWTS3W`: Three-winding transformer validation
+</ParamField>
+
+<ParamField path="validation_parameters" type="ValidationParameters">
+  Parameters for the validation
+</ParamField>
+
+<ResponseField name="return" type="ValidationResult">
+  Validation result containing DataFrames for each validation type
+</ResponseField>
+
+## Provider Management
+
+### get_provider_names
+
+Get the list of available load flow providers.
+
+```python
+pp.loadflow.get_provider_names() -> List[str]
+```
+
+<ResponseField name="return" type="List[str]">
+  List of available provider names
+</ResponseField>
+
+### get_default_provider
+
+Get the current default load flow provider.
+
+```python
+pp.loadflow.get_default_provider() -> str
+```
+
+<ResponseField name="return" type="str">
+  Name of the default provider (typically 'OpenLoadFlow')
+</ResponseField>
+
+### set_default_provider
+
+Set the default load flow provider.
+
+```python
+pp.loadflow.set_default_provider(provider: str)
+```
+
+<ParamField path="provider" type="str" required>
+  Name of the provider to set as default
+</ParamField>
+
+### get_provider_parameters
+
+Get provider-specific parameters.
+
+```python
+pp.loadflow.get_provider_parameters(provider: str = None) -> DataFrame
+```
+
+<ParamField path="provider" type="str">
+  Provider name. If None, uses the default provider
+</ParamField>
+
+<ResponseField name="return" type="DataFrame">
+  DataFrame with columns: category_key, description, type, default, possible_values
+</ResponseField>
+
+**Example:**
+
+```python
+import pypowsybl as pp
+
+# Get OpenLoadFlow parameters
+params = pp.loadflow.get_provider_parameters('OpenLoadFlow')
+print(params['description']['slackBusSelectionMode'])
+print(params['default']['slackBusSelectionMode'])
+```
+
+## Enumerations
+
+### VoltageInitMode
+
+- `UNIFORM_VALUES`: Flat start (all voltages at 1.0 pu)
+- `DC_VALUES`: Use DC load flow as starting point
+
+### BalanceType
+
+- `PROPORTIONAL_TO_LOAD`: Distribute slack on loads
+- `PROPORTIONAL_TO_GENERATION_P_MAX`: Distribute on generators by Pmax
+- `PROPORTIONAL_TO_GENERATION_P`: Distribute on generators by current P
+
+### ComponentMode
+
+- `MAIN_SYNCHRONOUS`: Main synchronous component only
+- `MAIN_CONNECTED`: Main connected component only  
+- `ALL_CONNECTED`: All connected components
+
+### ComponentStatus
+
+- `CONVERGED`: Calculation converged
+- `MAX_ITERATION_REACHED`: Maximum iterations reached
+- `FAILED`: Calculation failed
+
+## See Also
+
+- [Network](/api-reference/network) - Loading and creating networks
+- [Security Analysis](/api-reference/security) - N-1 security analysis

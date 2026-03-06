@@ -1,0 +1,267 @@
+---
+title: 'Flow Decomposition'
+description: 'API reference for flow decomposition module'
+---
+
+## Overview
+
+The flow decomposition module allows you to decompose power flows on transmission lines into their constituent components: commercial flow, loop flow from different zones, PST flow, and internal flow. This is useful for cross-border capacity calculation and congestion management.
+
+## Main Classes
+
+### FlowDecomposition
+
+Main class for configuring and running flow decomposition analysis.
+
+```python
+from pypowsybl.flowdecomposition import create_decomposition
+
+flow_decomposition = create_decomposition()
+```
+
+#### Methods
+
+<ParamField path="add_single_element_contingency" type="method">
+  Add a contingency with a single element (1 N-1 state).
+
+  **Parameters:**
+  - `element_id` (str): ID of the element
+  - `contingency_id` (str, optional): ID of the contingency. Defaults to element_id
+
+  **Returns:** FlowDecomposition (for method chaining)
+</ParamField>
+
+<ParamField path="add_single_element_contingencies" type="method">
+  Add a contingency for each element (n N-1 states).
+
+  **Parameters:**
+  - `element_ids` (List[str]): List of element IDs
+  - `contingency_id_provider` (Callable, optional): Function to transform element ID to contingency ID
+
+  **Returns:** FlowDecomposition
+</ParamField>
+
+<ParamField path="add_multiple_elements_contingency" type="method">
+  Add a contingency with multiple elements (1 N-k state).
+
+  **Parameters:**
+  - `elements_ids` (List[str]): List of element IDs
+  - `contingency_id` (str, optional): ID of the contingency. Defaults to concatenation of element IDs
+
+  **Returns:** FlowDecomposition
+</ParamField>
+
+<ParamField path="add_monitored_elements" type="method">
+  Add branches to be monitored by the flow decomposition.
+
+  Creates a XNEC for each valid pair of branch and state.
+
+  **Parameters:**
+  - `branch_ids` (List[str] or str): List of branches to monitor
+  - `contingency_ids` (List[str] or str, optional): List of contingencies
+  - `contingency_context_type` (ContingencyContextType): Type of states to monitor (ALL, NONE, or SPECIFIC)
+
+  **Returns:** FlowDecomposition
+
+  **Example:**
+  ```python
+  flow_decomposition.add_monitored_elements(
+      branch_ids=['LINE1', 'LINE2'],
+      contingency_ids=['CONT1', 'CONT2'],
+      contingency_context_type=ContingencyContextType.ALL
+  )
+  ```
+</ParamField>
+
+<ParamField path="add_precontingency_monitored_elements" type="method">
+  Add branches to be monitored on precontingency state (XNE).
+
+  **Parameters:**
+  - `branch_ids` (List[str] or str): List of branches to monitor
+
+  **Returns:** FlowDecomposition
+</ParamField>
+
+<ParamField path="add_postcontingency_monitored_elements" type="method">
+  Add branches to be monitored on postcontingency states (XNEC).
+
+  Creates a XNEC for each valid pair of branch and contingency. A pair is valid if the contingency does not contain the branch.
+
+  **Parameters:**
+  - `branch_ids` (List[str] or str): List of branches to monitor
+  - `contingency_ids` (List[str] or str): List of contingencies
+
+  **Returns:** FlowDecomposition
+</ParamField>
+
+<ParamField path="add_5perc_ptdf_as_monitored_elements" type="method">
+  Add branches with zone-to-zone PTDF > 5% or interconnections as monitored elements.
+
+  **Returns:** FlowDecomposition
+</ParamField>
+
+<ParamField path="add_interconnections_as_monitored_elements" type="method">
+  Add all interconnection branches as monitored elements.
+
+  **Returns:** FlowDecomposition
+</ParamField>
+
+<ParamField path="add_all_branches_as_monitored_elements" type="method">
+  Add all network branches as monitored elements.
+
+  **Returns:** FlowDecomposition
+</ParamField>
+
+<ParamField path="run" type="method">
+  Run the flow decomposition.
+
+  **Parameters:**
+  - `network` (Network): Network on which to compute flow decomposition
+  - `flow_decomposition_parameters` (Parameters, optional): Flow decomposition parameters
+  - `load_flow_parameters` (loadflow.Parameters, optional): Load flow parameters
+
+  **Returns:** DataFrame - Decomposed flow results
+
+  **Result Dataframe Columns:**
+  - `branch_id`: Branch ID
+  - `contingency_id`: Contingency ID
+  - `country1`: Country ID of terminal 1
+  - `country2`: Country ID of terminal 2
+  - `ac_reference_flow`: AC reference flow (MW)
+  - `dc_reference_flow`: DC reference flow (MW)
+  - `commercial_flow`: Commercial/allocated flow (MW)
+  - `x_node_flow`: Flow from unmerged XNodes (MW)
+  - `pst_flow`: PST flow (MW)
+  - `internal_flow`: Internal flow (MW)
+  - `loop_flow_from_XX`: Loop flow from zone XX (MW), one column per country
+
+  Index: `xnec_id`
+</ParamField>
+
+### Parameters
+
+Parameters for flow decomposition execution.
+
+```python
+from pypowsybl.flowdecomposition import Parameters, RescaleMode
+
+params = Parameters(
+    enable_losses_compensation=True,
+    losses_compensation_epsilon=1e-5,
+    sensitivity_epsilon=1e-5,
+    rescale_mode=RescaleMode.ACER_NTCF,
+    dc_fallback_enabled_after_ac_divergence=True,
+    sensitivity_variable_batch_size=15000
+)
+```
+
+<ParamField path="enable_losses_compensation" type="bool">
+  Enable AC losses compensation on the DC network
+</ParamField>
+
+<ParamField path="losses_compensation_epsilon" type="float">
+  Filter loads from losses compensation. Loads with absolute active power below this threshold will not be connected. Use -1 to disable filtering.
+</ParamField>
+
+<ParamField path="sensitivity_epsilon" type="float">
+  Filter sensitivity values. Absolute small sensitivity values below this threshold will be ignored. Use -1 to disable filtering.
+</ParamField>
+
+<ParamField path="rescale_mode" type="RescaleMode">
+  Rescale the flow decomposition to the AC reference.
+
+  **Enum Values:**
+  - `RescaleMode.NONE`: No rescaling
+  - `RescaleMode.ACER_NTCF`: ACER NTCF rescaling
+</ParamField>
+
+<ParamField path="dc_fallback_enabled_after_ac_divergence" type="bool">
+  Fallback behavior after AC divergence. If True, run DC loadflow if AC loadflow diverges. If False, throw exception on AC divergence.
+</ParamField>
+
+<ParamField path="sensitivity_variable_batch_size" type="int">
+  Chunk size for sensitivity analysis. Reduces memory footprint but increases computation time.
+</ParamField>
+
+### ContingencyContextType
+
+Enum defining contingency context types.
+
+```python
+from pypowsybl.flowdecomposition import ContingencyContextType
+
+# Values:
+# - ContingencyContextType.ALL: Monitor for all states
+# - ContingencyContextType.NONE: Monitor only N situation
+# - ContingencyContextType.SPECIFIC: Monitor only specified contingencies
+```
+
+## Utility Functions
+
+<ParamField path="create_decomposition" type="function">
+  Create a flow decomposition object.
+
+  **Returns:** FlowDecomposition
+
+  **Example:**
+  ```python
+  from pypowsybl.flowdecomposition import create_decomposition
+  
+  flow_decomposition = create_decomposition()
+  ```
+</ParamField>
+
+## Complete Example
+
+```python
+import pypowsybl as pp
+from pypowsybl.flowdecomposition import (
+    create_decomposition,
+    Parameters,
+    RescaleMode,
+    ContingencyContextType
+)
+
+# Create network
+network = pp.network.create_eurostag_tutorial_example1_network()
+
+# Configure parameters
+flow_params = Parameters(
+    enable_losses_compensation=True,
+    rescale_mode=RescaleMode.ACER_NTCF,
+    dc_fallback_enabled_after_ac_divergence=True
+)
+
+load_flow_params = pp.loadflow.Parameters()
+
+# Create and configure flow decomposition
+branch_ids = ['NHV1_NHV2_1', 'NHV1_NHV2_2']
+
+flow_decomposition = create_decomposition()
+flow_decomposition.add_single_element_contingencies(branch_ids)
+flow_decomposition.add_monitored_elements(
+    branch_ids=branch_ids,
+    contingency_ids=branch_ids,
+    contingency_context_type=ContingencyContextType.ALL
+)
+
+# Run flow decomposition
+result = flow_decomposition.run(
+    network=network,
+    flow_decomposition_parameters=flow_params,
+    load_flow_parameters=load_flow_params
+)
+
+# Display results
+print(result)
+print(f"\nColumns: {result.columns.tolist()}")
+print(f"\nAC Reference Flow:\n{result['ac_reference_flow']}")
+print(f"\nLoop Flows:\n{result.filter(like='loop_flow')}")
+```
+
+## Notes
+
+- Flow decomposition creates XNECs (cross-border network elements with contingencies) and XNEs (without contingencies)
+- A valid XNEC pair requires that the contingency does not contain the monitored branch
+- The resulting dataframe is indexed on `xnec_id`
+- Loop flow columns are dynamically generated based on the countries in the network

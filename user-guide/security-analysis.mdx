@@ -1,0 +1,345 @@
+---
+title: Security Analysis
+description: Perform N-1 contingency analysis and security assessments
+---
+
+Security analysis evaluates how a network responds to contingencies (equipment outages) by running load flows for each contingency and detecting limit violations.
+
+## Overview
+
+A security analysis consists of:
+
+1. **Pre-contingency analysis**: Load flow on the intact network
+2. **Post-contingency analysis**: Load flow for each contingency scenario
+3. **Limit violation detection**: Identify overloads and voltage issues
+4. **Remedial actions** (optional): Automatic corrective actions
+
+## Basic AC Security Analysis
+
+<Steps>
+  <Step title="Create a network and analysis">
+    ```python
+    import pypowsybl as pp
+    
+    network = pp.network.create_eurostag_tutorial_example1_network()
+    network.update_loads(id='LOAD', p0=800)
+    
+    sa = pp.security.create_analysis()
+    ```
+  </Step>
+  
+  <Step title="Add contingencies">
+    ```python
+    # Single element contingency
+    sa.add_single_element_contingency('NHV1_NHV2_1', 'First contingency')
+    
+    # Multiple contingencies
+    sa.add_single_element_contingencies(['NHV1_NHV2_1', 'NHV1_NHV2_2'])
+    ```
+  </Step>
+  
+  <Step title="Run the analysis">
+    ```python
+    result = sa.run_ac(network)
+    ```
+  </Step>
+  
+  <Step title="Analyze results">
+    ```python
+    # Pre-contingency results
+    print(result.pre_contingency_result)
+    # PreContingencyResult(status=CONVERGED, limit_violations=[3])
+    
+    # Post-contingency results
+    print(result.post_contingency_results)
+    
+    # All limit violations
+    print(result.limit_violations)
+    ```
+  </Step>
+</Steps>
+
+## Understanding Results
+
+### Limit Violations DataFrame
+
+The violations are organized by contingency:
+
+```python
+result.limit_violations
+#                           subject_name   limit_type limit_name   limit  acceptable_duration  limit_reduction  value side
+# contingency_id  subject_id
+#                 NHV1_NHV2_1                 CURRENT  permanent   500.0         2147483647              1.0  623.57  ONE
+#                 NHV1_NHV2_2                 CURRENT  permanent   500.0         2147483647              1.0  655.41  TWO
+# First contingency NHV1_NHV2_2             CURRENT        20'  1200.0                   60              1.0 1438.02  ONE
+```
+
+### Violation Types
+
+- **CURRENT**: Line or transformer overload
+- **LOW_VOLTAGE**: Voltage below minimum
+- **HIGH_VOLTAGE**: Voltage above maximum
+
+## Export Results
+
+Export complete results to JSON:
+
+```python
+n = pp.network.create_eurostag_tutorial_example1_network()
+sa = pp.security.create_analysis()
+sa_result = sa.run_ac(n)
+
+sa_result.export_to_json('security_analysis_results.json')
+```
+
+## Monitored Elements
+
+Get detailed information about specific network elements:
+
+```python
+network = pp.network.create_eurostag_tutorial_example1_with_more_generators_network()
+sa = pp.security.create_analysis()
+
+# Add contingencies
+sa.add_single_element_contingency('NHV1_NHV2_1', 'NHV1_NHV2_1')
+sa.add_single_element_contingency('GEN', 'GEN')
+
+# Monitor voltage levels (pre-contingency)
+sa.add_monitored_elements(voltage_level_ids=['VLHV2'])
+
+# Monitor branches (post-contingency)
+sa.add_postcontingency_monitored_elements(
+    branch_ids=['NHV1_NHV2_2'], 
+    contingency_ids=['NHV1_NHV2_1', 'GEN']
+)
+
+sa.add_precontingency_monitored_elements(branch_ids=['NHV1_NHV2_2'])
+
+results = sa.run_ac(network)
+
+# View bus results
+print(results.bus_results)
+
+# View branch results (includes flow transfer)
+print(results.branch_results)
+```
+
+<Note>
+  Flow transfer factors show how much additional flow appears on monitored branches after an N-1 contingency.
+</Note>
+
+## Operator Strategies and Remedial Actions
+
+Define automatic corrective actions to be applied after contingencies:
+
+### Available Action Types
+
+- `switch`: Open or close switches
+- `phase_tap_changer_position`: Change phase shifter tap
+- `ratio_tap_changer_position`: Change voltage tap
+- `load_active_power`: Modify load active power
+- `load_reactive_power`: Modify load reactive power
+- `shunt_compensator_position`: Change shunt sections
+- `generator_active_power`: Modify generator output
+- `terminals_connection`: Connect/disconnect equipment
+
+### Example with Switch Action
+
+```python
+n = pp.network.create_four_substations_node_breaker_network()
+sa = pp.security.create_analysis()
+
+# Define contingency
+sa.add_single_element_contingency(
+    element_id='S4VL1_BBS_LD6_DISCONNECTOR', 
+    contingency_id='Breaker contingency'
+)
+
+# Define remedial action
+sa.add_switch_action(
+    action_id='SwitchAction', 
+    switch_id='S4VL1_BBS_LD6_DISCONNECTOR', 
+    open=False  # Close the switch
+)
+
+# Create operator strategy
+sa.add_operator_strategy(
+    operator_strategy_id='OperatorStrategy1',
+    contingency_id='Breaker contingency',
+    action_ids=['SwitchAction'],
+    condition_type=pp.security.ConditionType.TRUE_CONDITION
+)
+
+# Monitor to see effect
+sa.add_monitored_elements(branch_ids=['LINE_S3S4'])
+sa_result = sa.run_ac(n)
+
+# Get post-remedial-action results
+df = sa_result.branch_results
+post_action_flow = df.loc['Breaker contingency', 'OperatorStrategy1', 'LINE_S3S4']['p1']
+print(f"Flow after remedial action: {post_action_flow:.2f} MW")
+```
+
+## Limit Reductions
+
+Apply safety margins by reducing operational limits:
+
+```python
+n = pp.network.create_eurostag_tutorial_example1_network()
+sa = pp.security.create_analysis()
+sa.add_single_element_contingency('NHV1_NHV2_1', 'First contingency')
+
+# Reduce all current limits by 20%
+sa.add_limit_reductions(
+    limit_type='CURRENT', 
+    permanent=True, 
+    temporary=True, 
+    value=0.8
+)
+
+sa_result = sa.run_ac(n)
+print(sa_result.limit_violations['limit_reduction'].unique())
+# [0.8]
+```
+
+### Selective Limit Reductions
+
+Apply reductions to specific network areas:
+
+```python
+# Only for France, 90-225kV, temporary limits >= 300s
+sa.add_limit_reductions(
+    limit_type='CURRENT',
+    permanent=False,
+    temporary=True,
+    value=0.9,
+    min_temporary_duration=300,
+    country='FR',
+    min_voltage=90,
+    max_voltage=225
+)
+```
+
+<Warning>
+  If multiple reductions apply to the same limit, only the last one added will be used.
+</Warning>
+
+## Loading from JSON Files
+
+Import contingencies, actions, and strategies from JSON:
+
+### Contingencies JSON
+
+```json
+{
+  "type": "default",
+  "version": "1.0",
+  "name": "list",
+  "contingencies": [
+    {
+      "id": "contingency",
+      "elements": [
+        {"id": "NHV1_NHV2_1", "type": "BRANCH"},
+        {"id": "NHV1_NHV2_2", "type": "BRANCH"}
+      ]
+    },
+    {
+      "id": "contingency2",
+      "elements": [{"id": "GEN", "type": "GENERATOR"}]
+    }
+  ]
+}
+```
+
+```python
+sa.add_contingencies_from_json_file('contingencies.json')
+```
+
+### Actions JSON
+
+```json
+{
+  "version": "1.0",
+  "actions": [
+    {
+      "type": "SWITCH",
+      "id": "id1",
+      "switchId": "S1VL2_LCC1_BREAKER",
+      "open": true
+    },
+    {
+      "type": "SWITCH",
+      "id": "id2",
+      "switchId": "S1VL2_BBS2_COUPLER_DISCONNECTOR",
+      "open": true
+    }
+  ]
+}
+```
+
+```python
+sa.add_actions_from_json_file('actions.json')
+```
+
+### Operator Strategies JSON
+
+```json
+{
+  "version": "1.1",
+  "operatorStrategies": [
+    {
+      "id": "id1",
+      "contingencyContextType": "SPECIFIC",
+      "contingencyId": "contingency",
+      "conditionalActions": [
+        {
+          "id": "stage1",
+          "condition": {"type": "TRUE_CONDITION"},
+          "actionIds": ["id1", "id2"]
+        }
+      ]
+    }
+  ]
+}
+```
+
+```python
+sa.add_operator_strategies_from_json_file('strategies.json')
+```
+
+## Best Practices
+
+<Accordion title="Organize Contingencies">
+  Group related contingencies:
+  - N-1 line contingencies
+  - N-1 transformer contingencies
+  - Generator outages
+  - Critical contingencies only
+</Accordion>
+
+<Accordion title="Monitor Key Elements">
+  Focus monitoring on:
+  - Interface tie lines
+  - High voltage substations
+  - Heavily loaded corridors
+  - Voltage-sensitive areas
+</Accordion>
+
+<Accordion title="Use Remedial Actions">
+  Define actions for:
+  - Automatic switching
+  - Load shedding
+  - Generation redispatch
+  - Transformer tap changes
+</Accordion>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Sensitivity Analysis" icon="chart-line" href="/user-guide/sensitivity-analysis">
+    Calculate sensitivity factors
+  </Card>
+  <Card title="Advanced Parameters" icon="sliders" href="/user-guide/advanced-parameters">
+    Tune performance settings
+  </Card>
+</CardGroup>

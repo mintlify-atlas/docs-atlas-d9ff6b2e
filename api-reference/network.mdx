@@ -1,0 +1,352 @@
+---
+title: 'Network'
+description: 'Network class and utilities for loading, creating, and manipulating power networks'
+---
+
+## Overview
+
+The Network module provides the core functionality for working with power system networks in PyPowSyBl. It includes the main `Network` class for representing and manipulating power networks, as well as utilities for loading networks from files, creating test networks, and accessing network data.
+
+## Network Class
+
+The `Network` class represents a power system network and provides methods for accessing and modifying network data.
+
+### Constructor
+
+The Network class is typically not instantiated directly. Instead, use one of the factory functions like `load()` or `create_empty()`.
+
+### Properties
+
+<ParamField path="id" type="str" readonly>
+  The unique identifier of the network
+</ParamField>
+
+<ParamField path="name" type="str" readonly>
+  The name of the network
+</ParamField>
+
+<ParamField path="source_format" type="str" readonly>
+  The format of the source file from which the network was loaded (e.g., 'XIIDM', 'UCTE')
+</ParamField>
+
+<ParamField path="case_date" type="datetime.datetime" readonly>
+  The date of the network case, in UTC timezone
+</ParamField>
+
+<ParamField path="forecast_distance" type="datetime.timedelta" readonly>
+  The forecast distance (0 for a snapshot)
+</ParamField>
+
+<ParamField path="nominal_apparent_power" type="float">
+  The nominal power used to convert the network to per-unit (in kVA). Default is 100.0
+</ParamField>
+
+<ParamField path="per_unit" type="bool">
+  Whether the network data should be used in per-unit representation. Default is False
+</ParamField>
+
+### Key Methods
+
+#### save
+
+Save a network to a file using the specified format.
+
+```python
+network.save(
+    file: str,
+    format: str = 'XIIDM',
+    parameters: dict = None,
+    report_node: ReportNode = None
+)
+```
+
+<ParamField path="file" type="str" required>
+  Path to the exported file
+</ParamField>
+
+<ParamField path="format" type="str" default="XIIDM">
+  Format to save the network (e.g., 'XIIDM', 'UCTE')
+</ParamField>
+
+<ParamField path="parameters" type="dict">
+  A dictionary of export parameters
+</ParamField>
+
+<ParamField path="report_node" type="ReportNode">
+  Reporter for creating an execution report
+</ParamField>
+
+<ResponseField name="return" type="None">
+  This method does not return a value
+</ResponseField>
+
+**Example:**
+
+```python
+import pypowsybl as pp
+
+network = pp.network.load('network.xiidm')
+network.save('output.xiidm')
+network.save('output.xiidm.gz')  # produces a gzipped file
+network.save('output.uct', format='UCTE')
+```
+
+#### connect / disconnect
+
+Connect or disconnect a network element.
+
+```python
+network.connect(id: str) -> bool
+network.disconnect(id: str) -> bool
+```
+
+<ParamField path="id" type="str" required>
+  The ID of the element to connect or disconnect
+</ParamField>
+
+<ResponseField name="return" type="bool">
+  True if the operation was successful
+</ResponseField>
+
+#### open_switch / close_switch
+
+Open or close a switch.
+
+```python
+network.open_switch(id: str) -> bool
+network.close_switch(id: str) -> bool
+```
+
+<ParamField path="id" type="str" required>
+  The ID of the switch
+</ParamField>
+
+<ResponseField name="return" type="bool">
+  True if the operation was successful
+</ResponseField>
+
+#### reduce_by_voltage_range
+
+Reduce the network to a smaller network by voltage range.
+
+```python
+network.reduce_by_voltage_range(
+    v_min: float = 0,
+    v_max: float = float('inf'),
+    with_dangling_lines: bool = False
+)
+```
+
+<ParamField path="v_min" type="float" default="0">
+  Minimum voltage of the voltage levels kept after reducing (in kV)
+</ParamField>
+
+<ParamField path="v_max" type="float" default="inf">
+  Maximum voltage of the voltage levels kept after reducing (in kV)
+</ParamField>
+
+<ParamField path="with_dangling_lines" type="bool" default="False">
+  Whether dangling lines should be created to replace lines cut at the boundary of reduction
+</ParamField>
+
+## Loading Networks
+
+### load
+
+Load a network from a file.
+
+```python
+pp.network.load(
+    file: str,
+    parameters: dict = None,
+    post_processors: list = None,
+    report_node: ReportNode = None,
+    allow_variant_multi_thread_access: bool = False
+) -> Network
+```
+
+<ParamField path="file" type="str" required>
+  Path to the network file. Supported formats include XIIDM, UCTE, and more. Compression formats (gzip, bzip2) are also supported
+</ParamField>
+
+<ParamField path="parameters" type="dict">
+  A dictionary of import parameters specific to the file format
+</ParamField>
+
+<ParamField path="post_processors" type="list">
+  A list of import post-processors to apply after loading
+</ParamField>
+
+<ParamField path="report_node" type="ReportNode">
+  Reporter for creating an execution report
+</ParamField>
+
+<ParamField path="allow_variant_multi_thread_access" type="bool" default="False">
+  Allow multi-thread access to network variants
+</ParamField>
+
+<ResponseField name="return" type="Network">
+  The loaded network object
+</ResponseField>
+
+**Example:**
+
+```python
+import pypowsybl as pp
+
+# Load from various file formats
+network = pp.network.load('network.xiidm')
+network = pp.network.load('/path/to/network.xiidm')
+network = pp.network.load('network.xiidm.gz')
+network = pp.network.load('network.uct')
+```
+
+### is_loadable
+
+Check if a file is a loadable network.
+
+```python
+pp.network.is_loadable(file: str) -> bool
+```
+
+<ParamField path="file" type="str" required>
+  Path to the file to check
+</ParamField>
+
+<ResponseField name="return" type="bool">
+  True if the file is a loadable network, False otherwise
+</ResponseField>
+
+## Creating Networks
+
+### create_empty
+
+Create an empty network.
+
+```python
+pp.network.create_empty(
+    network_id: str = "Default",
+    allow_variant_multi_thread_access: bool = False
+) -> Network
+```
+
+<ParamField path="network_id" type="str" default="Default">
+  ID of the network
+</ParamField>
+
+<ParamField path="allow_variant_multi_thread_access" type="bool" default="False">
+  Allow multi-thread access to network variants
+</ParamField>
+
+<ResponseField name="return" type="Network">
+  A new empty network
+</ResponseField>
+
+### IEEE Test Networks
+
+Create standard IEEE test networks:
+
+```python
+pp.network.create_ieee9() -> Network
+pp.network.create_ieee14() -> Network
+pp.network.create_ieee30() -> Network
+pp.network.create_ieee57() -> Network
+pp.network.create_ieee118() -> Network
+pp.network.create_ieee300() -> Network
+```
+
+**Example:**
+
+```python
+import pypowsybl as pp
+
+# Create IEEE 14-bus test network
+network = pp.network.create_ieee14()
+print(network.id)
+print(network.name)
+```
+
+### Other Test Networks
+
+```python
+# Create Eurostag tutorial example 1 network
+pp.network.create_eurostag_tutorial_example1_network() -> Network
+
+# Create four substations node breaker network
+pp.network.create_four_substations_node_breaker_network() -> Network
+
+# Create micro grid BE network
+pp.network.create_micro_grid_be_network() -> Network
+
+# Create micro grid NL network
+pp.network.create_micro_grid_nl_network() -> Network
+```
+
+## Utility Functions
+
+### get_import_formats
+
+Get the list of supported import formats.
+
+```python
+pp.network.get_import_formats() -> list
+```
+
+<ResponseField name="return" type="list">
+  List of supported import format names
+</ResponseField>
+
+### get_export_formats
+
+Get the list of supported export formats.
+
+```python
+pp.network.get_export_formats() -> list
+```
+
+<ResponseField name="return" type="list">
+  List of supported export format names
+</ResponseField>
+
+### get_import_parameters
+
+Get the import parameters for a specific format.
+
+```python
+pp.network.get_import_parameters(format: str) -> DataFrame
+```
+
+<ParamField path="format" type="str" required>
+  The import format name
+</ParamField>
+
+<ResponseField name="return" type="DataFrame">
+  DataFrame containing the available import parameters for the specified format
+</ResponseField>
+
+## Enumerations
+
+### ElementType
+
+Enumeration of network element types:
+- `NETWORK`
+- `SUBSTATION`
+- `VOLTAGE_LEVEL`
+- `GENERATOR`
+- `LOAD`
+- `BUS`
+- `LINE`
+- `TWO_WINDINGS_TRANSFORMER`
+- `THREE_WINDINGS_TRANSFORMER`
+- And more...
+
+### ValidationLevel
+
+Enumeration of validation levels:
+- `STEADY_STATE_HYPOTHESIS`
+- `EQUIPMENT`
+
+## See Also
+
+- [Load Flow](/api-reference/loadflow) - Run power flow calculations
+- [Security Analysis](/api-reference/security) - Perform security analysis

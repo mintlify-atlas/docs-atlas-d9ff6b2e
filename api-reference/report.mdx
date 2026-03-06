@@ -1,0 +1,222 @@
+---
+title: 'Report'
+description: 'Generate and manage computation reports in PyPowSyBl'
+icon: 'file-lines'
+---
+
+## Overview
+
+The `pypowsybl.report` module provides classes for generating detailed reports of power system computations. Reports capture execution logs, warnings, and diagnostic information from load flow, security analysis, and other computations.
+
+## Classes
+
+### ReportNode
+
+A report node is used to collect and organize computation logs and diagnostics.
+
+```python
+from pypowsybl import report
+
+# Create a report node
+report_node = report.ReportNode(task_key='', default_name='')
+
+# Use with load flow
+import pypowsybl as pp
+network = pp.network.create_ieee14()
+pp.loadflow.run_ac(network, report_node=report_node)
+
+# Display the report
+print(report_node)
+
+# Export to JSON
+json_report = report_node.to_json()
+```
+
+#### Constructor
+
+<ParamField path="task_key" type="str" default="">
+  Optional task identifier for organizing reports hierarchically
+</ParamField>
+
+<ParamField path="default_name" type="str" default="">
+  Optional default name for the report node
+</ParamField>
+
+#### Methods
+
+##### `__repr__() -> str`
+
+Returns a human-readable string representation of the report.
+
+```python
+report_node = report.ReportNode()
+# ... perform computations ...
+print(report_node)  # Displays formatted report
+```
+
+##### `to_json() -> str`
+
+Exports the report as a JSON string for programmatic processing or storage.
+
+```python
+report_node = report.ReportNode()
+# ... perform computations ...
+json_str = report_node.to_json()
+
+import json
+report_data = json.loads(json_str)
+```
+
+**Returns:** JSON-formatted string containing the complete report structure
+
+#### Properties
+
+##### `_report_node`
+
+Internal handle to the underlying Java report node object. This property is typically used internally by PyPowSyBl and should not be accessed directly in user code.
+
+**Type:** `JavaHandle`
+
+---
+
+### Reporter (Deprecated)
+
+<Warning>
+  `Reporter` is deprecated. Use `ReportNode` instead. The `Reporter` class will emit deprecation warnings when used.
+</Warning>
+
+Legacy reporter class that has been replaced by `ReportNode`. It provides the same functionality but is maintained for backward compatibility.
+
+```python
+import warnings
+from pypowsybl import report
+
+# This will trigger a DeprecationWarning
+with warnings.catch_warnings():
+    warnings.simplefilter("ignore", DeprecationWarning)
+    reporter = report.Reporter()
+```
+
+The `Reporter` class inherits all methods and behavior from `ReportNode` but emits deprecation warnings on all operations.
+
+## Usage Examples
+
+### Basic Report Generation
+
+```python
+import pypowsybl as pp
+from pypowsybl import report
+
+# Create network and report node
+network = pp.network.create_ieee14()
+report_node = report.ReportNode()
+
+# Run load flow with reporting
+results = pp.loadflow.run_ac(network, report_node=report_node)
+
+# View the report
+print(report_node)
+```
+
+### Collecting Reports from Multiple Operations
+
+```python
+import pypowsybl as pp
+from pypowsybl import report
+
+network = pp.network.create_ieee14()
+
+# Create separate report nodes for different operations
+lf_report = report.ReportNode(task_key='loadflow', default_name='Load Flow Report')
+sa_report = report.ReportNode(task_key='security', default_name='Security Analysis Report')
+
+# Run computations
+pp.loadflow.run_ac(network, report_node=lf_report)
+pp.security.run_analysis(network, report_node=sa_report)
+
+# Process reports separately
+print("Load Flow Report:")
+print(lf_report)
+print("\nSecurity Analysis Report:")
+print(sa_report)
+```
+
+### Exporting Reports to JSON
+
+```python
+import pypowsybl as pp
+from pypowsybl import report
+import json
+
+network = pp.network.create_ieee14()
+report_node = report.ReportNode()
+
+pp.loadflow.run_ac(network, report_node=report_node)
+
+# Export and save to file
+json_report = report_node.to_json()
+with open('loadflow_report.json', 'w') as f:
+    json.dump(json.loads(json_report), f, indent=2)
+```
+
+### Using Reports in Analysis Workflows
+
+```python
+import pypowsybl as pp
+from pypowsybl import report
+
+def analyze_network_with_logging(network):
+    """Run comprehensive network analysis with detailed reporting."""
+    report_node = report.ReportNode(
+        task_key='analysis',
+        default_name='Network Analysis'
+    )
+    
+    # Run analysis
+    results = pp.loadflow.run_ac(network, report_node=report_node)
+    
+    # Check for warnings or errors in the report
+    report_text = str(report_node)
+    if 'ERROR' in report_text:
+        print("Errors detected in analysis:")
+        print(report_node)
+        return None
+    
+    return results
+
+# Use the function
+network = pp.network.create_ieee14()
+results = analyze_network_with_logging(network)
+```
+
+## Integration with PyPowSyBl Functions
+
+Most computation functions in PyPowSyBl accept a `report_node` parameter:
+
+- `pypowsybl.loadflow.run_ac(network, report_node=...)`
+- `pypowsybl.loadflow.run_dc(network, report_node=...)`
+- `pypowsybl.security.run_analysis(network, report_node=...)`
+- `pypowsybl.sensitivity.run_analysis(network, report_node=...)`
+- `pypowsybl.network.save(network, report_node=...)`
+- `pypowsybl.network.load(file, report_node=...)`
+
+## Best Practices
+
+<Tip>
+  Always create a new `ReportNode` for each major computation to keep reports organized and prevent information from different operations from mixing.
+</Tip>
+
+<Note>
+  Reports can become quite large for complex networks and computations. Consider processing them programmatically using the `to_json()` method rather than printing them in production code.
+</Note>
+
+<Warning>
+  The `Reporter` class is deprecated. Migrate existing code to use `ReportNode` to avoid deprecation warnings and ensure future compatibility.
+</Warning>
+
+## See Also
+
+- [Load Flow Documentation](/api-reference/loadflow) - Learn how to use reports with load flow analysis
+- [Security Analysis Documentation](/api-reference/security) - Using reports with security analysis
+- [Network Documentation](/api-reference/network) - Reports during network import/export
+- [Exceptions](/api-reference/exceptions) - Error handling in PyPowSyBl

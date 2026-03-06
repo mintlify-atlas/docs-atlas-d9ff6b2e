@@ -1,0 +1,160 @@
+---
+title: "Installation"
+description: "Install PyPowSyBl on your system"
+---
+
+PyPowSyBl is released on [PyPI](https://pypi.org/project/pypowsybl/) for Python 3.9 to 3.13, on Linux, Windows, and macOS.
+
+## Prerequisites
+
+Before installing PyPowSyBl, ensure you have:
+
+- **Python**: Version 3.9 or higher (up to 3.13)
+- **Operating System**: Linux, Windows, or macOS (both amd64 and arm64)
+- **pip**: An up-to-date version of pip and setuptools
+
+<Note>
+PyPowSyBl relies on GraalVM to compile Java code to a native library, but the pre-built wheels include all necessary native libraries, so you don't need to install Java or GraalVM for standard usage.
+</Note>
+
+## Standard Installation
+
+<Steps>
+  <Step title="Update pip and setuptools">
+    First, make sure you have an up-to-date version of pip and setuptools:
+
+    ```bash
+    pip install --upgrade setuptools pip
+    ```
+  </Step>
+
+  <Step title="Install PyPowSyBl">
+    Install PyPowSyBl using pip:
+
+    ```bash
+    pip install pypowsybl
+    ```
+
+    This will install PyPowSyBl along with its core dependencies:
+    - pandas (>=2.2.3)
+    - prettytable (>=2.0.0)
+    - networkx
+  </Step>
+
+  <Step title="Verify installation">
+    Verify that PyPowSyBl is installed correctly:
+
+    ```python
+    import pypowsybl as pp
+    pp.print_version()
+    ```
+
+    This should print version information about PyPowSyBl and its components.
+  </Step>
+</Steps>
+
+## Optional Dependencies
+
+### PandaPower Integration
+
+If you want to use PandaPower conversion features, install PyPowSyBl with the pandapower extra:
+
+```bash
+pip install pypowsybl[pandapower]
+```
+
+This will install `pandapower>=2.14.11` along with PyPowSyBl.
+
+## Platform-Specific Notes
+
+### Linux
+
+PyPowSyBl works out of the box on most Linux distributions. The package includes pre-built native libraries for x86_64 architecture.
+
+### Windows
+
+On Windows, PyPowSyBl is available for 64-bit Python installations. Make sure you're using a 64-bit version of Python.
+
+### macOS
+
+PyPowSyBl supports both Intel (amd64) and Apple Silicon (arm64) Macs. The correct native libraries will be automatically selected based on your architecture.
+
+## Development Installation
+
+If you want to contribute to PyPowSyBl or build from sources, you'll need additional requirements:
+
+<Warning>
+Development installation requires Maven, CMake, a C++11 compiler, and Oracle GraalVM Java 21. This is only necessary for developers modifying PyPowSyBl itself.
+</Warning>
+
+<Steps>
+  <Step title="Install build requirements">
+    Required tools:
+    - Maven >= 3.1
+    - CMake >= 3.20
+    - C++11 compiler
+    - [Oracle GraalVM Java 21](https://www.graalvm.org/downloads/)
+  </Step>
+
+  <Step title="Clone the repository">
+    ```bash
+    git clone https://github.com/powsybl/pypowsybl.git
+    cd pypowsybl
+    ```
+  </Step>
+
+  <Step title="Set JAVA_HOME">
+    ```bash
+    export JAVA_HOME=<path to GraalVM>
+    ```
+  </Step>
+
+  <Step title="Install dependencies">
+    ```bash
+    pip install --upgrade setuptools pip
+    pip install -r requirements.txt
+    ```
+  </Step>
+
+  <Step title="Install in editable mode">
+    For development, use editable mode:
+
+    ```bash
+    pip install -e .
+    ```
+
+    Or with debug symbols:
+
+    ```bash
+    python setup.py build --debug develop --user
+    ```
+  </Step>
+</Steps>
+
+## Troubleshooting
+
+### Import Errors
+
+If you encounter import errors after installation, ensure that:
+- Your Python version is between 3.9 and 3.13
+- You're using a 64-bit Python installation (on Windows)
+- pip and setuptools are up to date
+
+### Native Library Issues
+
+If you see errors related to native libraries, try:
+1. Reinstalling PyPowSyBl: `pip install --force-reinstall pypowsybl`
+2. Checking your system architecture matches the installed package
+3. Ensuring you have the latest version: `pip install --upgrade pypowsybl`
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Quickstart" icon="rocket" href="/quickstart">
+    Get started with your first load flow calculation
+  </Card>
+  
+  <Card title="API Reference" icon="code" href="/api-reference/network">
+    Explore the complete API documentation
+  </Card>
+</CardGroup>

@@ -1,0 +1,317 @@
+---
+title: Per Unit Values
+description: Work with per-unit (pu) representation of network quantities
+---
+
+Per-unit representation normalizes network quantities to dimensionless values, making it easier to compare values across different voltage levels and simplifying calculations.
+
+## Overview
+
+Per-unit system expresses quantities as fractions of base values:
+
+- **Voltage**: Fraction of nominal voltage
+- **Power**: Fraction of base apparent power
+- **Impedance**: Normalized by base voltage and power
+- **Current**: Normalized current
+
+## Enabling Per-Unit Mode
+
+Set the `per_unit` attribute on your network:
+
+```python
+import pypowsybl as pp
+
+net = pp.network.create_four_substations_node_breaker_network()
+net.per_unit = True
+
+# All quantities now returned in per-unit
+lines = net.get_lines()
+print(lines[['r', 'x', 'p1', 'q1', 'i1']])
+#               r         x        p1        q1        i1
+# LINE_S2S3  0.000006  0.011938  1.098893  1.900229  2.147594
+# LINE_S3S4  0.000006  0.008188  2.400036  0.021751  2.400135
+```
+
+<Note>
+  Values are automatically converted when you retrieve them. The underlying network data remains in physical units.
+</Note>
+
+## Base Apparent Power
+
+The default base is 100 MVA. You can change it:
+
+```python
+net.nominal_apparent_power = 250  # MVA
+
+lines = net.get_lines()
+print(lines[['r', 'x', 'p1', 'q1']])
+#               r         x        p1        q1
+# LINE_S2S3  0.000016  0.029844  0.439557  0.760092
+# LINE_S3S4  0.000016  0.020469  0.960014  0.008700
+```
+
+## Per-Unit Formulas
+
+### Resistance (R)
+
+For elements with one nominal voltage:
+
+$$R_{pu} = \frac{S_n}{V_{nom}^2} \cdot R$$
+
+For lines (two voltage levels):
+
+$$R_{pu} = \frac{S_n}{V_{nom1} \cdot V_{nom2}} \cdot R$$
+
+For two-winding transformers, use $V_{nom2}$ (secondary side).
+
+### Reactance (X)
+
+Same formulas as resistance:
+
+For elements with one nominal voltage:
+
+$$X_{pu} = \frac{S_n}{V_{nom}^2} \cdot X$$
+
+For lines:
+
+$$X_{pu} = \frac{S_n}{V_{nom1} \cdot V_{nom2}} \cdot X$$
+
+### Susceptance (B)
+
+For elements with one nominal voltage:
+
+$$B_{pu} = \frac{V_{nom}^2}{S_n} \cdot B$$
+
+For lines (side 1):
+
+$$B_{pu} = \frac{V_{nom1}^2 \cdot B + (V_{nom1} - V_{nom2}) \cdot V_{nom1} \cdot Im(Y)}{S_n}$$
+
+where $Y$ is the admittance and $Im()$ is the imaginary part.
+
+### Conductance (G)
+
+For elements with one nominal voltage:
+
+$$G_{pu} = \frac{V_{nom}^2}{S_n} \cdot G$$
+
+For lines (side 1):
+
+$$G_{pu} = \frac{V_{nom1}^2 \cdot G + (V_{nom1} - V_{nom2}) \cdot V_{nom1} \cdot Re(Y)}{S_n}$$
+
+where $Y$ is the admittance and $Re()$ is the real part.
+
+For side 2, swap $V_{nom1}$ and $V_{nom2}$.
+
+### Voltage (V)
+
+$$V_{pu} = \frac{V}{V_{nom}}$$
+
+For equipment with target voltage, it's normalized by the target element's nominal voltage.
+
+### Active Power (P)
+
+$$P_{pu} = \frac{P}{S_n}$$
+
+### Reactive Power (Q)
+
+$$Q_{pu} = \frac{Q}{S_n}$$
+
+### Current (I)
+
+$$I_{pu} = \frac{\sqrt{3} \cdot V_{nom}}{S_n \cdot 10^3} \cdot I$$
+
+### Angle
+
+<Warning>
+  When per-unit is enabled, angles are returned in **radians** instead of degrees (though this isn't strictly a per-unit conversion).
+</Warning>
+
+## Example: Comparing Values
+
+Per-unit makes it easy to compare values across voltage levels:
+
+```python
+import pypowsybl as pp
+
+net = pp.network.create_eurostag_tutorial_example1_network()
+net.per_unit = True
+
+# Get generators at different voltage levels
+gens = net.get_generators()
+print(gens[['voltage_level_id', 'target_p', 'target_v', 'p', 'q']])
+
+# All values are normalized, easy to compare
+# regardless of voltage level
+```
+
+## Working with Load Flow Results
+
+Run load flow and view results in per-unit:
+
+```python
+import pypowsybl as pp
+import pypowsybl.loadflow as lf
+
+net = pp.network.create_ieee14()
+net.per_unit = True
+net.nominal_apparent_power = 100  # MVA
+
+# Run load flow
+result = lf.run_ac(net)
+
+# Get per-unit results
+buses = net.get_buses()
+print(buses[['v_mag', 'v_angle']])  # Voltage in pu, angle in radians
+
+lines = net.get_lines()
+print(lines[['p1', 'q1', 'i1']])  # Power and current in pu
+```
+
+## Use Cases
+
+<Accordion title="Multi-Voltage Level Analysis">
+  Per-unit values allow direct comparison across different voltage levels:
+  
+  ```python
+  net.per_unit = True
+  
+  # Compare loading across all voltage levels
+  lines = net.get_lines()
+  lines['loading'] = lines['i1']  # Already normalized
+  print(lines[['voltage_level1_id', 'loading']].sort_values('loading'))
+  ```
+</Accordion>
+
+<Accordion title="Benchmark Networks">
+  Compare different networks on the same scale:
+  
+  ```python
+  # Both networks use same base power
+  net1.per_unit = True
+  net1.nominal_apparent_power = 100
+  
+  net2.per_unit = True
+  net2.nominal_apparent_power = 100
+  
+  # Now directly comparable
+  ```
+</Accordion>
+
+<Accordion title="Educational Purposes">
+  Per-unit values simplify understanding:
+  - Typical ranges (0.95-1.05 for voltage)
+  - Relative magnitudes
+  - Universal comparisons
+</Accordion>
+
+## Switching Between Units
+
+Easily toggle per-unit mode:
+
+```python
+net = pp.network.create_ieee14()
+
+# Physical units
+net.per_unit = False
+gens_physical = net.get_generators()[['target_p', 'target_v']]
+print("Physical units:")
+print(gens_physical)
+
+# Per-unit
+net.per_unit = True
+gens_pu = net.get_generators()[['target_p', 'target_v']]
+print("\nPer-unit:")
+print(gens_pu)
+```
+
+## Typical Per-Unit Ranges
+
+Understanding normal ranges helps identify issues:
+
+| Quantity | Typical Range | Alert Level |
+|----------|---------------|-------------|
+| Voltage | 0.95 - 1.05 pu | < 0.90 or > 1.10 pu |
+| Line loading | 0.0 - 0.8 pu | > 1.0 pu |
+| Generator output | 0.0 - 1.0 pu | > 1.0 pu |
+| Transformer tap | 0.9 - 1.1 pu | Outside range |
+
+## Best Practices
+
+<Steps>
+  <Step title="Choose consistent base power">
+    Use standard base (100 MVA) or match system requirements.
+  </Step>
+  
+  <Step title="Document your choice">
+    Always note the base power in reports and documentation.
+  </Step>
+  
+  <Step title="Check angle units">
+    Remember angles switch to radians in per-unit mode.
+  </Step>
+  
+  <Step title="Verify calculations">
+    Cross-check critical values in both units initially.
+  </Step>
+</Steps>
+
+## Converting Back to Physical Units
+
+If you need to convert specific values:
+
+```python
+# From per-unit to physical
+V_nom = 400  # kV
+S_base = 100  # MVA
+
+V_pu = 1.05
+V_kV = V_pu * V_nom  # 420 kV
+
+P_pu = 0.75
+P_MW = P_pu * S_base  # 75 MW
+
+Z_pu = 0.1
+Z_base = V_nom**2 / S_base  # Base impedance
+Z_ohm = Z_pu * Z_base
+```
+
+## Debugging Tips
+
+<Accordion title="Unexpected values">
+  Check:
+  - Is per_unit actually enabled?
+  - Is nominal_apparent_power set correctly?
+  - Are nominal voltages correct in the network?
+  
+  ```python
+  print(f"Per-unit enabled: {net.per_unit}")
+  print(f"Base power: {net.nominal_apparent_power} MVA")
+  vl = net.get_voltage_levels()
+  print(vl[['id', 'nominal_v']])
+  ```
+</Accordion>
+
+<Accordion title="Angles in wrong units">
+  Remember per-unit mode changes angles to radians:
+  
+  ```python
+  import numpy as np
+  
+  net.per_unit = True
+  buses = net.get_buses()
+  
+  # Convert to degrees if needed
+  buses['v_angle_deg'] = np.degrees(buses['v_angle'])
+  ```
+</Accordion>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Advanced Parameters" icon="sliders" href="/user-guide/advanced-parameters">
+    Configure memory and performance
+  </Card>
+  <Card title="Logging" icon="terminal" href="/user-guide/logging">
+    Configure logging output
+  </Card>
+</CardGroup>

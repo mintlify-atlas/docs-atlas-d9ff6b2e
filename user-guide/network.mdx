@@ -1,0 +1,372 @@
+---
+title: Network Model
+description: Learn how to create, load, and manipulate power network models in PyPowSyBl
+---
+
+The `Network` object is the main data structure of PyPowSyBl. It contains all the data of a power network: substations, generators, lines, transformers, and more.
+
+## Creating a Network
+
+PyPowSyBl provides several ways to create networks:
+
+<Steps>
+  <Step title="Use factory methods">
+    Create well-known network models like IEEE test cases:
+    
+    ```python
+    import pypowsybl as pp
+    
+    network = pp.network.create_ieee9()
+    network = pp.network.create_ieee14()
+    ```
+  </Step>
+  
+  <Step title="Load from file">
+    Load networks from various file formats:
+    
+    ```python
+    network = pp.network.load('my-network.xiidm')
+    ```
+  </Step>
+  
+  <Step title="Create from scratch">
+    Build networks programmatically:
+    
+    ```python
+    network = pp.network.create_empty()
+    network.create_substations(id=['S1', 'S2'])
+    ```
+  </Step>
+</Steps>
+
+### Supported Import Formats
+
+You can check available import formats and file extensions:
+
+```python
+pp.network.get_import_formats()
+# ['BIIDM', 'CGMES', 'IEEE-CDF', 'JIIDM', 'MATPOWER', 'POWER-FACTORY', 'PSS/E', 'UCTE', 'XIIDM']
+
+pp.network.get_import_supported_extensions()
+# ['RAW', 'RAWX', 'UCT', 'biidm', 'bin', 'dgs', 'iidm', ...]
+```
+
+<Note>
+  Import formats may support specific parameters. Use `get_import_parameters()` to discover them:
+  
+  ```python
+  network = pp.network.load('ieee14.raw', 
+                            {'psse.import.ignore-base-voltage': 'true'})
+  ```
+</Note>
+
+### Loading from Binary Buffer
+
+You can load networks from binary buffers (useful for zipped networks):
+
+```python
+import io
+
+with open('battery_xiidm.zip', 'rb') as fh:
+    n = pp.network.load_from_binary_buffer(io.BytesIO(fh.read()))
+```
+
+### Post Processors
+
+Post processors can be applied after import:
+
+```python
+# List available post processors
+pp.network.get_import_post_processors()
+# ['geoJsonImporter', 'loadflowResultsCompletion', 'replaceTieLinesByLines']
+
+# Apply post processors
+network = pp.network.load('mycgmes.zip', 
+                          post_processors=['replaceTieLinesByLines'])
+```
+
+## Saving a Network
+
+Networks can be exported to various formats:
+
+<CodeGroup>
+  ```python To File
+  network.save('network.xiidm', format='XIIDM')
+  ```
+  
+  ```python To String
+  xiidm_str = network.save_to_string('XIIDM')
+  ```
+  
+  ```python To Binary Buffer
+  zipped_xiidm = network.save_to_binary_buffer('XIIDM')
+  ```
+</CodeGroup>
+
+### Supported Export Formats
+
+```python
+pp.network.get_export_formats()
+# ['AMPL', 'BIIDM', 'CGMES', 'JIIDM', 'MATPOWER', 'PSS/E', 'UCTE', 'XIIDM']
+```
+
+## Reading Network Data
+
+All network elements can be read as Pandas DataFrames:
+
+```python
+network = pp.network.create_eurostag_tutorial_example1_network()
+
+# Get generators data
+gens = network.get_generators()
+print(gens[['target_p', 'max_p', 'voltage_regulator_on']])
+```
+
+### Supported Network Elements
+
+You can retrieve data for:
+
+- **Buses** (from bus view or bus/breaker view)
+- **Lines** and **Branches**
+- **Transformers** (2 and 3 windings)
+- **Generators** and **Loads**
+- **Shunt compensators**
+- **Dangling lines**
+- **HVDC lines** and **Converters** (LCC and VSC)
+- **Static VAR compensators**
+- **Switches**
+- **Voltage levels** and **Substations**
+- **Busbar sections**
+
+### Multi-Index DataFrames
+
+Some complex elements use multi-index DataFrames:
+
+```python
+# Tap changer steps indexed by transformer ID and position
+steps = network.get_ratio_tap_changer_steps()
+print(steps.loc['NHV2_NLOAD'])  # Get steps for specific transformer
+```
+
+## Updating Network Elements
+
+Network elements can be updated using simple values, lists, or DataFrames:
+
+<Accordion title="Method 1: Simple Values">
+  ```python
+  network.update_loads(id='LOAD', p0=500, q0=300)
+  ```
+</Accordion>
+
+<Accordion title="Method 2: Lists">
+  ```python
+  network.update_loads(id=['LOAD'], p0=[500], q0=[300])
+  ```
+</Accordion>
+
+<Accordion title="Method 3: DataFrame">
+  ```python
+  import pandas as pd
+  
+  df = pd.DataFrame(index=['LOAD'], 
+                    columns=['p0', 'q0'], 
+                    data=[[500, 300]])
+  network.update_loads(df)
+  ```
+</Accordion>
+
+## Topology Changes
+
+Connect or disconnect elements by updating their status:
+
+```python
+# Check connection status
+network.get_generators()[['connected', 'bus_id']]
+
+# Disconnect a generator
+network.update_generators(id='GEN', connected=False)
+```
+
+## Working with Variants
+
+Variants allow you to maintain multiple network states:
+
+```python
+network = pp.network.create_eurostag_tutorial_example1_network()
+
+# Create a new variant
+network.clone_variant('InitialState', 'Variant')
+network.get_variant_ids()
+# ['InitialState', 'Variant']
+
+# Switch to the variant and make changes
+network.set_working_variant('Variant')
+network.update_generators(id='GEN', target_p=700)
+
+# Use context manager for automatic switching
+with network.working_variant('Variant'):
+    network.update_generators(id='GEN', target_p=701)
+    # Automatically switches back when context exits
+
+# Remove variant when done
+network.remove_variant('Variant')
+```
+
+## Creating Network Elements
+
+Build networks from scratch by creating elements:
+
+```python
+network = pp.network.create_empty()
+
+# Create substations
+network.create_substations(id=['S1', 'S2'])
+
+# Create voltage levels
+import pandas as pd
+voltage_levels = pd.DataFrame.from_records(index='id', data=[
+    {'substation_id': 'S1', 'id': 'VL1', 
+     'topology_kind': 'BUS_BREAKER', 'nominal_v': 400},
+    {'substation_id': 'S2', 'id': 'VL2', 
+     'topology_kind': 'BUS_BREAKER', 'nominal_v': 400},
+])
+network.create_voltage_levels(voltage_levels)
+
+# Create buses
+network.create_buses(id=['B1', 'B2'], 
+                     voltage_level_id=['VL1', 'VL2'])
+
+# Create a line connecting the buses
+network.create_lines(id='LINE', 
+                     voltage_level1_id='VL1', bus1_id='B1',
+                     voltage_level2_id='VL2', bus2_id='B2',
+                     b1=0, b2=0, g1=0, g2=0, r=0.5, x=10)
+
+# Add loads and generators
+network.create_loads(id='LOAD', voltage_level_id='VL2', 
+                     bus_id='B2', p0=100, q0=10)
+network.create_generators(id='GEN', voltage_level_id='VL1', 
+                          bus_id='B1', min_p=0, max_p=200, 
+                          target_p=100, voltage_regulator_on=True, 
+                          target_v=400)
+```
+
+### Verify Your Network
+
+Run a load flow to verify your network works:
+
+```python
+import pypowsybl.loadflow as lf
+
+res = lf.run_ac(network)
+print(res[0].status)  # Should show CONVERGED
+```
+
+## Node/Breaker Topology
+
+For detailed node/breaker networks, PyPowSyBl provides helper methods:
+
+```python
+# Create a load bay (automatically creates switches)
+pp.network.create_load_bay(network, 
+                           id='load2', 
+                           p0=10.0, 
+                           q0=3.0, 
+                           bus_or_busbar_section_id='BBS3', 
+                           position_order=15)
+
+# Create a generator bay
+pp.network.create_generator_bay(network, 
+                                id='gen1', 
+                                max_p=1000, 
+                                min_p=0, 
+                                voltage_regulator_on=True,
+                                target_p=100, 
+                                target_q=150, 
+                                target_v=225, 
+                                bus_or_busbar_section_id='BBS1',
+                                position_order=5)
+
+# Create line bays on both sides
+pp.network.create_line_bays(network, 
+                            id='line2', 
+                            r=0.1, x=10, 
+                            g1=0, b1=0, g2=0, b2=0,
+                            bus_or_busbar_section_id_1='BBS3',
+                            position_order_1=25,
+                            bus_or_busbar_section_id_2='BBS4',
+                            position_order_2=15)
+```
+
+## Network Merging
+
+Merge multiple networks into one:
+
+```python
+be = pp.network.create_micro_grid_be_network()
+nl = pp.network.create_micro_grid_nl_network()
+
+# Merge NL into BE
+be.merge(nl)
+
+# Access sub-networks
+be.get_sub_networks()
+
+# Get specific sub-network
+nl_sub = be.get_sub_network('urn:uuid:77b55f87-fc1e-4046-9599-6c6b4f991a86')
+
+# Detach sub-network
+nl_sub.detach()
+```
+
+## Network Reduction
+
+Reduce networks by voltage level or specific elements:
+
+<CodeGroup>
+  ```python By Voltage Range
+  net = pp.network.create_four_substations_node_breaker_network()
+  net.reduce_by_voltage_range(v_min=400)
+  ```
+  
+  ```python By IDs and Depth
+  net.reduce_by_ids_and_depths(vl_depths=[('S1VL1', 1)])
+  ```
+  
+  ```python By ID List
+  net.reduce_by_ids(['VL1', 'VL2', 'VL3'])
+  ```
+</CodeGroup>
+
+## Operational Limits
+
+Manage operational limits for branches and transformers:
+
+```python
+# Get operational limits
+net = pp.network.create_eurostag_tutorial_example1_network()
+limits = net.get_operational_limits()
+print(limits)
+
+# Get all limit groups (not just selected)
+limits_all = net.get_operational_limits(all_attributes=True, 
+                                        show_inactive_sets=True)
+
+# Change selected limit group
+net.update_lines(id='LINE1', selected_limits_group_2='OTHER_GROUP')
+```
+
+<Warning>
+  Do not commit files containing secrets (`.env`, `credentials.json`, etc.) to version control.
+</Warning>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Load Flow" icon="bolt" href="/user-guide/loadflow">
+    Run power flow calculations
+  </Card>
+  <Card title="Network Visualization" icon="chart-network" href="/user-guide/network-visualization">
+    Create diagrams and visualizations
+  </Card>
+</CardGroup>

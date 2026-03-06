@@ -1,0 +1,441 @@
+---
+title: 'Security Analysis'
+description: 'N-1 and contingency security analysis for power networks'
+---
+
+## Overview
+
+The Security Analysis module performs N-1 security analysis to identify violations that occur after contingencies (outages of network elements). It evaluates the network's ability to withstand single or multiple element failures while maintaining operational constraints.
+
+## Creating Security Analysis
+
+### create_analysis
+
+Create a security analysis instance.
+
+```python
+pp.security.create_analysis() -> SecurityAnalysis
+```
+
+<ResponseField name="return" type="SecurityAnalysis">
+  A new security analysis instance
+</ResponseField>
+
+**Example:**
+
+```python
+import pypowsybl as pp
+
+network = pp.network.create_ieee14()
+analysis = pp.security.create_analysis()
+```
+
+## SecurityAnalysis Class
+
+The `SecurityAnalysis` class allows you to configure and run security analysis on a network.
+
+### Adding Contingencies
+
+#### add_single_element_contingency
+
+Add a contingency involving a single network element.
+
+```python
+analysis.add_single_element_contingency(
+    contingency_id: str,
+    element_id: str
+)
+```
+
+<ParamField path="contingency_id" type="str" required>
+  Unique identifier for the contingency
+</ParamField>
+
+<ParamField path="element_id" type="str" required>
+  ID of the network element to trip (line, transformer, generator, etc.)
+</ParamField>
+
+**Example:**
+
+```python
+analysis.add_single_element_contingency('LINE_1_OUTAGE', 'LINE_1')
+analysis.add_single_element_contingency('GEN_2_OUTAGE', 'GEN_2')
+```
+
+#### add_multiple_elements_contingency
+
+Add a contingency involving multiple network elements.
+
+```python
+analysis.add_multiple_elements_contingency(
+    contingency_id: str,
+    element_ids: List[str]
+)
+```
+
+<ParamField path="contingency_id" type="str" required>
+  Unique identifier for the contingency
+</ParamField>
+
+<ParamField path="element_ids" type="List[str]" required>
+  List of network element IDs to trip simultaneously
+</ParamField>
+
+**Example:**
+
+```python
+analysis.add_multiple_elements_contingency(
+    'DOUBLE_OUTAGE',
+    ['LINE_1', 'LINE_2']
+)
+```
+
+### Adding Monitored Elements
+
+#### add_monitored_elements
+
+Add elements to be monitored by the security analysis.
+
+```python
+analysis.add_monitored_elements(
+    contingency_context_type: ContingencyContextType = ContingencyContextType.ALL,
+    contingency_ids: List[str] = None,
+    branch_ids: List[str] = None,
+    voltage_level_ids: List[str] = None,
+    three_windings_transformer_ids: List[str] = None
+)
+```
+
+<ParamField path="contingency_context_type" type="ContingencyContextType" default="ALL">
+  When to monitor the elements:
+  - `ALL`: Monitor for all contingencies
+  - `NONE`: Monitor only in N situation (pre-contingency)
+  - `SPECIFIC`: Monitor for specific contingencies
+</ParamField>
+
+<ParamField path="contingency_ids" type="List[str]">
+  List of contingency IDs for which to monitor (used with SPECIFIC context)
+</ParamField>
+
+<ParamField path="branch_ids" type="List[str]">
+  List of branch IDs to monitor
+</ParamField>
+
+<ParamField path="voltage_level_ids" type="List[str]">
+  List of voltage level IDs to monitor
+</ParamField>
+
+<ParamField path="three_windings_transformer_ids" type="List[str]">
+  List of three-winding transformer IDs to monitor
+</ParamField>
+
+**Example:**
+
+```python
+# Monitor specific branches for all contingencies
+analysis.add_monitored_elements(
+    branch_ids=['LINE_1', 'LINE_2', 'LINE_3']
+)
+
+# Monitor elements only in pre-contingency state
+analysis.add_precontingency_monitored_elements(
+    branch_ids=['LINE_4', 'LINE_5']
+)
+
+# Monitor for specific contingencies
+analysis.add_postcontingency_monitored_elements(
+    contingency_ids=['LINE_1_OUTAGE', 'LINE_2_OUTAGE'],
+    branch_ids=['LINE_6']
+)
+```
+
+### Running Analysis
+
+#### run_ac
+
+Run an AC security analysis.
+
+```python
+analysis.run_ac(
+    network: Network,
+    parameters: Parameters = None,
+    provider: str = '',
+    report_node: ReportNode = None
+) -> SecurityAnalysisResult
+```
+
+<ParamField path="network" type="Network" required>
+  Network on which to run the security analysis
+</ParamField>
+
+<ParamField path="parameters" type="Parameters">
+  Security analysis parameters
+</ParamField>
+
+<ParamField path="provider" type="str" default="">
+  Security analysis implementation provider. If empty, uses default
+</ParamField>
+
+<ParamField path="report_node" type="ReportNode">
+  Reporter for execution reports
+</ParamField>
+
+<ResponseField name="return" type="SecurityAnalysisResult">
+  Security analysis result containing violations and monitored elements information
+</ResponseField>
+
+**Example:**
+
+```python
+import pypowsybl as pp
+
+network = pp.network.create_ieee14()
+analysis = pp.security.create_analysis()
+
+# Add contingencies
+analysis.add_single_element_contingency('LINE_1_OUT', 'L1-2-1')
+analysis.add_single_element_contingency('LINE_2_OUT', 'L1-5-1')
+
+# Run analysis
+result = analysis.run_ac(network)
+
+# Check for violations
+print(f"Pre-contingency violations: {len(result.pre_contingency_result.limit_violations)}")
+for contingency_result in result.post_contingency_results:
+    print(f"Contingency {contingency_result.contingency_id}: "
+          f"{len(contingency_result.limit_violations)} violations")
+```
+
+#### run_dc
+
+Run a DC security analysis.
+
+```python
+analysis.run_dc(
+    network: Network,
+    parameters: Parameters = None,
+    provider: str = '',
+    report_node: ReportNode = None
+) -> SecurityAnalysisResult
+```
+
+Parameters are identical to `run_ac`. DC security analysis uses simplified DC power flow for faster computation.
+
+## Parameters
+
+### Parameters Class
+
+Configure security analysis execution.
+
+```python
+pp.security.Parameters(
+    load_flow_parameters: pp.loadflow.Parameters = None,
+    increased_violations_parameters: IncreasedViolationsParameters = None,
+    provider_parameters: dict = None
+)
+```
+
+<ParamField path="load_flow_parameters" type="pp.loadflow.Parameters">
+  Load flow parameters used for security analysis calculations. See [Load Flow Parameters](/api-reference/loadflow#parameters-class)
+</ParamField>
+
+<ParamField path="increased_violations_parameters" type="IncreasedViolationsParameters">
+  Define what violations should be considered increased between N and post-contingency situations
+</ParamField>
+
+<ParamField path="provider_parameters" type="dict">
+  Provider-specific parameters as key-value pairs
+</ParamField>
+
+**Example:**
+
+```python
+import pypowsybl as pp
+
+lf_params = pp.loadflow.Parameters(
+    distributed_slack=True
+)
+
+sa_params = pp.security.Parameters(
+    load_flow_parameters=lf_params
+)
+
+result = analysis.run_ac(network, parameters=sa_params)
+```
+
+### IncreasedViolationsParameters
+
+Define thresholds for identifying increased violations.
+
+```python
+pp.security.IncreasedViolationsParameters(
+    flow_proportional_threshold: float = 0.1,
+    low_voltage_proportional_threshold: float = 0.0,
+    low_voltage_absolute_threshold: float = 0.0,
+    high_voltage_proportional_threshold: float = 0.0,
+    high_voltage_absolute_threshold: float = 0.0
+)
+```
+
+<ParamField path="flow_proportional_threshold" type="float" default="0.1">
+  Proportional threshold for flow violations (default 10%)
+</ParamField>
+
+<ParamField path="low_voltage_proportional_threshold" type="float" default="0.0">
+  Proportional threshold for low voltage violations
+</ParamField>
+
+<ParamField path="low_voltage_absolute_threshold" type="float" default="0.0">
+  Absolute threshold for low voltage violations (in kV)
+</ParamField>
+
+<ParamField path="high_voltage_proportional_threshold" type="float" default="0.0">
+  Proportional threshold for high voltage violations
+</ParamField>
+
+<ParamField path="high_voltage_absolute_threshold" type="float" default="0.0">
+  Absolute threshold for high voltage violations (in kV)
+</ParamField>
+
+## Results
+
+### SecurityAnalysisResult
+
+Contains the complete results of a security analysis.
+
+<ParamField path="pre_contingency_result" type="PreContingencyResult" readonly>
+  Results for the N situation (no contingency)
+</ParamField>
+
+<ParamField path="post_contingency_results" type="List[PostContingencyResult]" readonly>
+  List of results for each contingency
+</ParamField>
+
+<ParamField path="limit_violations" type="DataFrame" readonly>
+  DataFrame of all limit violations across all contingencies
+</ParamField>
+
+<ParamField path="branch_results" type="DataFrame" readonly>
+  DataFrame with power flow results for monitored branches
+</ParamField>
+
+<ParamField path="bus_results" type="DataFrame" readonly>
+  DataFrame with voltage results for monitored buses
+</ParamField>
+
+### PostContingencyResult
+
+Results for a single contingency.
+
+<ParamField path="contingency_id" type="str" readonly>
+  ID of the contingency
+</ParamField>
+
+<ParamField path="status" type="ComputationStatus" readonly>
+  Computation status:
+  - `CONVERGED`: Load flow converged
+  - `MAX_ITERATION_REACHED`: Maximum iterations reached
+  - `FAILED`: Computation failed
+</ParamField>
+
+<ParamField path="limit_violations" type="DataFrame" readonly>
+  DataFrame of limit violations for this contingency
+</ParamField>
+
+**Example:**
+
+```python
+result = analysis.run_ac(network)
+
+# Access pre-contingency violations
+pre_violations = result.pre_contingency_result.limit_violations
+print(f"Pre-contingency violations: {len(pre_violations)}")
+
+# Access post-contingency results
+for pc_result in result.post_contingency_results:
+    if pc_result.status == pp.security.ComputationStatus.CONVERGED:
+        violations = pc_result.limit_violations
+        print(f"{pc_result.contingency_id}: {len(violations)} violations")
+        if len(violations) > 0:
+            print(violations[['subject_id', 'limit_type', 'value', 'limit']])
+```
+
+## Provider Management
+
+### get_provider_names
+
+Get the list of available security analysis providers.
+
+```python
+pp.security.get_provider_names() -> List[str]
+```
+
+<ResponseField name="return" type="List[str]">
+  List of available provider names
+</ResponseField>
+
+### get_default_provider
+
+Get the current default security analysis provider.
+
+```python
+pp.security.get_default_provider() -> str
+```
+
+<ResponseField name="return" type="str">
+  Name of the default provider
+</ResponseField>
+
+### set_default_provider
+
+Set the default security analysis provider.
+
+```python
+pp.security.set_default_provider(provider: str)
+```
+
+<ParamField path="provider" type="str" required>
+  Name of the provider to set as default
+</ParamField>
+
+## Enumerations
+
+### ContingencyContextType
+
+- `ALL`: Apply to all contingencies
+- `NONE`: Apply to N situation only (pre-contingency)
+- `SPECIFIC`: Apply to specific contingencies
+
+### ComputationStatus
+
+- `CONVERGED`: Computation converged successfully
+- `MAX_ITERATION_REACHED`: Maximum iterations reached
+- `FAILED`: Computation failed
+
+### ConditionType
+
+Types of conditions for contingencies:
+- `TRUE_CONDITION`
+- `ANY_VIOLATION_CONDITION`
+- `AT_LEAST_ONE_VIOLATION_CONDITION`
+
+## ContingencyContainer
+
+Base class providing contingency management methods (inherited by SecurityAnalysis).
+
+### get_contingencies
+
+Get the list of defined contingencies.
+
+```python
+analysis.get_contingencies() -> DataFrame
+```
+
+<ResponseField name="return" type="DataFrame">
+  DataFrame containing all defined contingencies with their elements
+</ResponseField>
+
+## See Also
+
+- [Load Flow](/api-reference/loadflow) - Power flow calculations
+- [Sensitivity Analysis](/api-reference/sensitivity) - Sensitivity factors

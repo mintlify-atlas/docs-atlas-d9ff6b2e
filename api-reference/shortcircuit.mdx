@@ -1,0 +1,463 @@
+---
+title: 'Short Circuit'
+description: 'Short-circuit analysis for power networks'
+---
+
+## Overview
+
+The Short Circuit module performs short-circuit analysis to compute fault currents and voltages when faults occur in the network. It supports bus faults and branch faults with configurable fault impedances.
+
+## Creating Short Circuit Analysis
+
+### create_analysis
+
+Create a short-circuit analysis instance.
+
+```python
+pp.shortcircuit.create_analysis() -> ShortCircuitAnalysis
+```
+
+<ResponseField name="return" type="ShortCircuitAnalysis">
+  A new short-circuit analysis instance
+</ResponseField>
+
+**Example:**
+
+```python
+import pypowsybl as pp
+
+network = pp.network.create_ieee14()
+analysis = pp.shortcircuit.create_analysis()
+```
+
+## ShortCircuitAnalysis Class
+
+The `ShortCircuitAnalysis` class allows you to configure and run short-circuit analysis on a network.
+
+### Defining Faults
+
+#### set_faults
+
+Define faults to be analyzed in the short-circuit simulation.
+
+```python
+analysis.set_faults(
+    df: DataFrame = None,
+    **kwargs
+)
+```
+
+<ParamField path="df" type="DataFrame">
+  Faults defined as a DataFrame with columns: id, element_id, r, x, proportional_location, fault_type
+</ParamField>
+
+<ParamField path="kwargs" type="keyword arguments">
+  Alternatively, define faults as keyword arguments. All arrays must have the same length:
+  - **id**: Fault identifier
+  - **element_id**: ID of the bus or branch on which the fault occurs
+  - **r**: Fault resistance to ground in Ohm (optional)
+  - **x**: Fault reactance to ground in Ohm (optional)
+  - **proportional_location**: Location of fault on branch as percentage (0.0-1.0, for branch faults only)
+  - **fault_type**: Either 'BUS_FAULT' or 'BRANCH_FAULT'
+</ParamField>
+
+**Example:**
+
+```python
+import pypowsybl as pp
+import pandas as pd
+
+network = pp.network.create_ieee14()
+analysis = pp.shortcircuit.create_analysis()
+
+# Define single fault as keyword arguments
+analysis.set_faults(
+    id='FAULT_1',
+    element_id='VL1_0',
+    r=0.0,
+    x=0.0,
+    fault_type='BUS_FAULT'
+)
+
+# Define multiple faults as keyword arguments
+analysis.set_faults(
+    id=['FAULT_1', 'FAULT_2'],
+    element_id=['VL1_0', 'VL2_0'],
+    r=[0.0, 0.1],
+    x=[0.0, 0.2],
+    fault_type=['BUS_FAULT', 'BUS_FAULT']
+)
+
+# Define faults as DataFrame
+faults_df = pd.DataFrame({
+    'id': ['FAULT_1', 'FAULT_2'],
+    'element_id': ['VL1_0', 'VL2_0'],
+    'r': [0.0, 0.0],
+    'x': [0.0, 0.0],
+    'fault_type': ['BUS_FAULT', 'BUS_FAULT']
+})
+analysis.set_faults(df=faults_df)
+```
+
+#### set_bus_fault
+
+Convenience method to define a bus fault.
+
+```python
+analysis.set_bus_fault(
+    bus_id: str,
+    element_id: str,
+    r: float,
+    x: float
+)
+```
+
+<ParamField path="bus_id" type="str" required>
+  Fault identifier
+</ParamField>
+
+<ParamField path="element_id" type="str" required>
+  ID of the bus on which the fault occurs
+</ParamField>
+
+<ParamField path="r" type="float" required>
+  Fault resistance to ground in Ohm
+</ParamField>
+
+<ParamField path="x" type="float" required>
+  Fault reactance to ground in Ohm
+</ParamField>
+
+#### set_branch_fault
+
+Convenience method to define a branch fault.
+
+```python
+analysis.set_branch_fault(
+    branch_id: str,
+    element_id: str,
+    r: float,
+    x: float,
+    proportional_location: float
+)
+```
+
+<ParamField path="branch_id" type="str" required>
+  Fault identifier
+</ParamField>
+
+<ParamField path="element_id" type="str" required>
+  ID of the branch (line or transformer) on which the fault occurs
+</ParamField>
+
+<ParamField path="r" type="float" required>
+  Fault resistance to ground in Ohm
+</ParamField>
+
+<ParamField path="x" type="float" required>
+  Fault reactance to ground in Ohm
+</ParamField>
+
+<ParamField path="proportional_location" type="float" required>
+  Location of the fault on the branch as a percentage (0.0 = side 1, 1.0 = side 2)
+</ParamField>
+
+**Example:**
+
+```python
+# Bus fault at bus VL1_0 with zero impedance
+analysis.set_bus_fault(
+    bus_id='FAULT_BUS_1',
+    element_id='VL1_0',
+    r=0.0,
+    x=0.0
+)
+
+# Branch fault at 50% along line L1-2-1
+analysis.set_branch_fault(
+    branch_id='FAULT_LINE_1',
+    element_id='L1-2-1',
+    r=0.1,
+    x=0.2,
+    proportional_location=0.5
+)
+```
+
+### Running Analysis
+
+#### run
+
+Run the short-circuit analysis.
+
+```python
+analysis.run(
+    network: Network,
+    parameters: Parameters = None,
+    provider: str = '',
+    report_node: ReportNode = None
+) -> ShortCircuitAnalysisResult
+```
+
+<ParamField path="network" type="Network" required>
+  Network on which to run the short-circuit analysis
+</ParamField>
+
+<ParamField path="parameters" type="Parameters">
+  Short-circuit analysis parameters
+</ParamField>
+
+<ParamField path="provider" type="str" default="">
+  Short-circuit analysis implementation provider. If empty, uses default
+</ParamField>
+
+<ParamField path="report_node" type="ReportNode">
+  Reporter for execution reports
+</ParamField>
+
+<ResponseField name="return" type="ShortCircuitAnalysisResult">
+  Short-circuit analysis result containing fault currents and voltages
+</ResponseField>
+
+**Example:**
+
+```python
+import pypowsybl as pp
+
+network = pp.network.create_ieee14()
+analysis = pp.shortcircuit.create_analysis()
+
+# Define fault
+buses = network.get_buses()
+analysis.set_bus_fault(
+    bus_id='FAULT_1',
+    element_id=buses.index[0],
+    r=0.0,
+    x=0.0
+)
+
+# Run analysis
+result = analysis.run(network)
+
+# Access results
+fault_results = result.fault_results
+print(fault_results[['fault_id', 'current', 'voltage_magnitude']])
+```
+
+## Parameters
+
+### Parameters Class
+
+Configure short-circuit analysis execution.
+
+```python
+pp.shortcircuit.Parameters(
+    with_feeder_result: bool = None,
+    with_limit_violations: bool = None,
+    with_voltage_result: bool = None,
+    min_voltage_drop_proportional_threshold: float = None,
+    study_type: ShortCircuitStudyType = None,
+    with_fortescue_result: bool = None,
+    initial_voltage_profile_mode: InitialVoltageProfileMode = None,
+    provider_parameters: dict = None
+)
+```
+
+<ParamField path="with_feeder_result" type="bool" default="False">
+  Whether to calculate the contributions of each feeder to the short-circuit current at the fault node
+</ParamField>
+
+<ParamField path="with_limit_violations" type="bool" default="False">
+  Whether to return limit violations. When True, returns buses where the short-circuit current exceeds limits
+</ParamField>
+
+<ParamField path="with_voltage_result" type="bool" default="False">
+  Whether to calculate the voltage profile on every node of the network
+</ParamField>
+
+<ParamField path="min_voltage_drop_proportional_threshold" type="float" default="0.0">
+  Threshold for filtering voltage results. Only nodes with voltage drop greater than this threshold are retained
+</ParamField>
+
+<ParamField path="study_type" type="ShortCircuitStudyType" default="TRANSIENT">
+  Type of short-circuit study:
+  - `SUB_TRANSIENT`: Sub-transient period
+  - `TRANSIENT`: Transient period
+  - `STEADY_STATE`: Steady-state
+</ParamField>
+
+<ParamField path="with_fortescue_result" type="bool" default="False">
+  Whether currents and voltages should be detailed with magnitude and angle on each phase (symmetrical components)
+</ParamField>
+
+<ParamField path="initial_voltage_profile_mode" type="InitialVoltageProfileMode" default="NOMINAL">
+  How the computation is initialized:
+  - `NOMINAL`: Use nominal voltages
+  - `CONFIGURED`: Use configured voltage profile
+  - `PREVIOUS_VALUE`: Use previous calculated values
+</ParamField>
+
+<ParamField path="provider_parameters" type="dict">
+  Provider-specific parameters as key-value pairs
+</ParamField>
+
+**Example:**
+
+```python
+import pypowsybl as pp
+from pypowsybl.shortcircuit import ShortCircuitStudyType
+
+parameters = pp.shortcircuit.Parameters(
+    with_feeder_result=True,
+    with_voltage_result=True,
+    with_limit_violations=True,
+    study_type=ShortCircuitStudyType.SUB_TRANSIENT,
+    min_voltage_drop_proportional_threshold=0.05
+)
+
+result = analysis.run(network, parameters=parameters)
+```
+
+## Results
+
+### ShortCircuitAnalysisResult
+
+Contains the results of a short-circuit analysis.
+
+<ParamField path="fault_results" type="DataFrame" readonly>
+  DataFrame with short-circuit results for each fault. Columns include:
+  - **fault_id**: Fault identifier
+  - **current**: Short-circuit current magnitude (in A)
+  - **voltage_magnitude**: Voltage magnitude at fault location (in kV)
+  - **short_circuit_power**: Short-circuit power (in MVA)
+  And more depending on parameters...
+</ParamField>
+
+<ParamField path="feeder_results" type="DataFrame" readonly>
+  DataFrame with contributions from each feeder (if with_feeder_result=True). Columns include:
+  - **fault_id**: Fault identifier
+  - **connector_id**: ID of the connecting element
+  - **current**: Current contribution magnitude (in A)
+</ParamField>
+
+<ParamField path="limit_violations" type="DataFrame" readonly>
+  DataFrame with limit violations (if with_limit_violations=True)
+</ParamField>
+
+<ParamField path="voltage_results" type="DataFrame" readonly>
+  DataFrame with voltage profile (if with_voltage_result=True)
+</ParamField>
+
+<ParamField path="fortescue_results" type="DataFrame" readonly>
+  DataFrame with three-phase results (if with_fortescue_result=True)
+</ParamField>
+
+**Example:**
+
+```python
+result = analysis.run(network, parameters=parameters)
+
+# Access fault results
+fault_results = result.fault_results
+print("Fault Results:")
+print(fault_results[['fault_id', 'current', 'voltage_magnitude']])
+
+# Access feeder contributions (if requested)
+if result.feeder_results is not None:
+    feeder_results = result.feeder_results
+    print("\nFeeder Contributions:")
+    print(feeder_results[['fault_id', 'connector_id', 'current']])
+
+# Access voltage results (if requested)
+if result.voltage_results is not None:
+    voltage_results = result.voltage_results
+    print("\nVoltage Profile:")
+    print(voltage_results.head())
+```
+
+## Provider Management
+
+### get_provider_names
+
+Get the list of available short-circuit analysis providers.
+
+```python
+pp.shortcircuit.get_provider_names() -> List[str]
+```
+
+<ResponseField name="return" type="List[str]">
+  List of available provider names
+</ResponseField>
+
+### get_default_provider
+
+Get the current default short-circuit analysis provider.
+
+```python
+pp.shortcircuit.get_default_provider() -> str
+```
+
+<ResponseField name="return" type="str">
+  Name of the default provider
+</ResponseField>
+
+### set_default_provider
+
+Set the default short-circuit analysis provider.
+
+```python
+pp.shortcircuit.set_default_provider(provider: str)
+```
+
+<ParamField path="provider" type="str" required>
+  Name of the provider to set as default
+</ParamField>
+
+### get_provider_parameters_names
+
+Get the list of provider-specific parameter names.
+
+```python
+pp.shortcircuit.get_provider_parameters_names(provider: str = None) -> List[str]
+```
+
+<ParamField path="provider" type="str">
+  Provider name. If None, uses default provider
+</ParamField>
+
+<ResponseField name="return" type="List[str]">
+  List of parameter names
+</ResponseField>
+
+## Enumerations
+
+### ShortCircuitStudyType
+
+Type of short-circuit study:
+
+- `SUB_TRANSIENT`: Sub-transient period (first few cycles after fault)
+- `TRANSIENT`: Transient period
+- `STEADY_STATE`: Steady-state short-circuit conditions
+
+### InitialVoltageProfileMode
+
+How the voltage profile is initialized:
+
+- `NOMINAL`: Use nominal voltages for all buses
+- `CONFIGURED`: Use configured voltage profile from extensions
+- `PREVIOUS_VALUE`: Use previously calculated voltage values (e.g., from load flow)
+
+## Notes
+
+<Note>
+  The current implementation supports three-phase bus faults where the fault resistance and reactance, when specified, are connected to ground in series.
+</Note>
+
+<Note>
+  For accurate results, ensure that the network includes the necessary short-circuit data such as generator transient/sub-transient reactances. These may need to be configured via network extensions.
+</Note>
+
+## See Also
+
+- [Network](/api-reference/network) - Loading and creating networks
+- [Load Flow](/api-reference/loadflow) - Power flow calculations
+- [Security Analysis](/api-reference/security) - N-1 security analysis

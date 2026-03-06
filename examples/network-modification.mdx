@@ -1,0 +1,569 @@
+---
+title: Network Modification
+description: Learn how to modify power networks by adding, updating, and removing components
+---
+
+PyPowSyBl provides comprehensive tools for modifying power networks. You can add new components, update existing ones, create complex topologies, and perform structural modifications.
+
+## Basic Component Updates
+
+### Updating Loads
+
+```python
+import pypowsybl as pp
+import pandas as pd
+
+# Create a network
+network = pp.network.create_ieee14()
+
+# Get current loads
+loads = network.get_loads()
+print("Original loads:")
+print(loads[['p0', 'q0']])
+
+# Modify loads (20% increase)
+loads_df = loads.copy()
+loads_df['p0'] = loads_df['p0'] * 1.2
+loads_df['q0'] = loads_df['q0'] * 1.2
+
+# Update the network
+network.update_loads(loads_df)
+
+print("\nUpdated loads:")
+print(network.get_loads()[['p0', 'q0']])
+```
+
+### Updating Generators
+
+```python
+import pypowsybl as pp
+
+# Create a network
+network = pp.network.create_ieee14()
+
+# Get generators
+gens = network.get_generators()
+
+# Increase generation capacity
+gens_df = gens.copy()
+gens_df['max_p'] = gens_df['max_p'] * 1.1
+gens_df['target_p'] = gens_df['target_p'] * 1.05
+
+# Update the network
+network.update_generators(gens_df)
+
+print("Generator capacities updated")
+```
+
+### Updating Lines and Transformers
+
+```python
+import pypowsybl as pp
+
+network = pp.network.create_eurostag_tutorial_example1_network()
+
+# Modify line parameters
+lines = network.get_lines()
+lines_df = lines.copy()
+
+# Increase line resistance by 5%
+lines_df['r'] = lines_df['r'] * 1.05
+
+network.update_lines(lines_df)
+print("Line parameters updated")
+```
+
+## Adding New Components
+
+### Creating a Load Bay
+
+<Steps>
+  <Step title="Prepare load data">
+    ```python
+    import pypowsybl as pp
+    import pandas as pd
+    
+    network = pp.network.create_four_substations_node_breaker_network_with_extensions()
+    ```
+  </Step>
+
+  <Step title="Define load parameters">
+    ```python
+    # Create load data
+    load_data = pd.DataFrame(
+        index=["new_load"],
+        columns=["id", "p0", "q0", "bus_or_busbar_section_id", "position_order"],
+        data=[["new_load", 10.0, 3.0, "S1VL1_BBS", 0]]
+    )
+    ```
+  </Step>
+
+  <Step title="Add the load bay">
+    ```python
+    # Add load bay to the network
+    pp.network.create_load_bay(network=network, df=load_data, raise_exception=True)
+    
+    # Verify the load was added
+    load = network.get_loads().loc["new_load"]
+    print(f"Load added: P={load.p0} MW, Q={load.q0} MVAr")
+    ```
+  </Step>
+</Steps>
+
+### Adding a Generator Bay
+
+```python
+import pypowsybl as pp
+import pandas as pd
+
+network = pp.network.create_four_substations_node_breaker_network_with_extensions()
+
+# Define generator parameters
+gen_data = pd.DataFrame.from_records(
+    data=[('new_gen', 4999, -9999.99, True, 100, 150, 300, 'S1VL1_BBS', 15, 'TOP')],
+    columns=['id', 'max_p', 'min_p', 'voltage_regulator_on', 'target_p', 'target_q', 
+             'target_v', 'bus_or_busbar_section_id', 'position_order', 'direction'],
+    index='id'
+)
+
+# Add generator bay
+pp.network.create_generator_bay(network, gen_data)
+
+# Verify
+generator = network.get_generators().loc['new_gen']
+print(f"Generator added: P={generator.target_p} MW, Q={generator.target_q} MVAr")
+print(f"Voltage level: {generator.voltage_level_id}")
+```
+
+### Adding a Battery Bay
+
+```python
+import pypowsybl as pp
+import pandas as pd
+
+network = pp.network.create_four_substations_node_breaker_network_with_extensions()
+
+# Define battery parameters
+battery_data = pd.DataFrame.from_records(
+    columns=['id', 'bus_or_busbar_section_id', 'max_p', 'min_p', 'target_p', 'target_q', 'position_order'],
+    data=[('new_battery', 'S1VL1_BBS', 100, 10, 90, 20, 15)],
+    index='id'
+)
+
+# Add battery bay
+pp.network.create_battery_bay(network, battery_data)
+
+# Verify
+battery = network.get_batteries().loc['new_battery']
+print(f"Battery: max_p={battery.max_p} MW, min_p={battery.min_p} MW")
+print(f"Target: p={battery.target_p} MW, q={battery.target_q} MVAr")
+```
+
+## Creating Lines and Transformers
+
+### Adding Transmission Lines
+
+<CodeGroup>
+```python Bus-Breaker Topology
+import pypowsybl as pp
+import pandas as pd
+
+network = pp.network.create_eurostag_tutorial_example1_network()
+
+# Define line parameters
+line_data = pd.DataFrame(
+    index=['new_line'],
+    columns=['id', 'bus_or_busbar_section_id_1', 'bus_or_busbar_section_id_2', 
+             'r', 'x', 'g1', 'g2', 'b1', 'b2'],
+    data=[['new_line', 'NHV1', 'NHV2', 5.0, 50.0, 20.0, 30.0, 40.0, 50.0]]
+)
+
+# Create line bays
+pp.network.create_line_bays(network, line_data)
+
+# Verify
+line = network.get_lines().loc['new_line']
+print(f"Line created: r={line.r}, x={line.x}")
+print(f"Connected: side1={line.connected1}, side2={line.connected2}")
+```
+
+```python Node-Breaker Topology
+import pypowsybl as pp
+import pandas as pd
+
+network = pp.network.create_four_substations_node_breaker_network()
+
+# Define line with position information
+line_data = pd.DataFrame(
+    index=['new_line'],
+    columns=['id', 'bus_or_busbar_section_id_1', 'bus_or_busbar_section_id_2',
+             'position_order_1', 'position_order_2', 'direction_1', 'direction_2',
+             'r', 'x', 'g1', 'g2', 'b1', 'b2'],
+    data=[['new_line', 'S1VL2_BBS1', 'S2VL1_BBS', 115, 121, 'TOP', 'TOP',
+            5.0, 50.0, 20.0, 30.0, 40.0, 50.0]]
+)
+
+pp.network.create_line_bays(network, line_data)
+print("Line bay created with node-breaker topology")
+```
+</CodeGroup>
+
+### Adding Transformers
+
+```python
+import pypowsybl as pp
+import pandas as pd
+
+network = pp.network.create_eurostag_tutorial_example1_network()
+
+# Define transformer parameters
+transformer_data = pd.DataFrame(
+    index=['new_twt'],
+    columns=['id', 'bus_or_busbar_section_id_1', 'bus_or_busbar_section_id_2',
+             'r', 'x', 'g', 'b', 'rated_u1', 'rated_u2', 'rated_s'],
+    data=[['new_twt', 'NGEN', 'NHV1', 5.0, 50.0, 2.0, 4.0, 225.0, 400.0, 1.0]]
+)
+
+# Create transformer bays
+pp.network.create_2_windings_transformer_bays(network, transformer_data)
+
+# Verify
+twt = network.get_2_windings_transformers().loc['new_twt']
+print(f"Transformer created: r={twt.r}, x={twt.x}")
+print(f"Ratings: {twt.rated_u1} kV / {twt.rated_u2} kV")
+```
+
+## Creating Complex Components
+
+### Adding Shunt Compensators
+
+<CodeGroup>
+```python Linear Shunt
+import pypowsybl as pp
+import pandas as pd
+
+network = pp.network.create_four_substations_node_breaker_network_with_extensions()
+
+# Define linear shunt parameters
+shunt_df = pd.DataFrame.from_records(
+    index='id',
+    columns=['id', 'name', 'model_type', 'section_count', 'target_v',
+             'target_deadband', 'bus_or_busbar_section_id', 'position_order'],
+    data=[('shunt_test', '', 'LINEAR', 1, 400, 2, 'S1VL1_BBS', 25)]
+)
+
+model_df = pd.DataFrame.from_records(
+    index='id',
+    columns=['id', 'g_per_section', 'b_per_section', 'max_section_count'],
+    data=[('shunt_test', 0.14, -0.01, 2)]
+)
+
+# Create shunt compensator bay
+pp.network.create_shunt_compensator_bay(
+    network, 
+    shunt_df=shunt_df, 
+    linear_model_df=model_df, 
+    raise_exception=True
+)
+
+print("Linear shunt compensator created")
+```
+
+```python Non-Linear Shunt
+import pypowsybl as pp
+import pandas as pd
+
+network = pp.network.create_four_substations_node_breaker_network_with_extensions()
+
+# Define non-linear shunt with multiple sections
+shunt_df = pd.DataFrame.from_records(
+    index='id',
+    columns=['id', 'name', 'model_type', 'section_count', 'target_v',
+             'target_deadband', 'bus_or_busbar_section_id', 'position_order'],
+    data=[('shunt1', '', 'NON_LINEAR', 1, 400, 2, 'S1VL1_BBS', 25),
+          ('shunt2', '', 'NON_LINEAR', 1, 400, 2, 'S1VL1_BBS', 55)]
+)
+
+model_df = pd.DataFrame.from_records(
+    index='id',
+    columns=['id', 'g', 'b'],
+    data=[('shunt1', 1, 2),
+          ('shunt1', 3, 4),
+          ('shunt2', 5, 6),
+          ('shunt2', 7, 8)]
+)
+
+pp.network.create_shunt_compensator_bay(
+    network, 
+    shunt_df=shunt_df, 
+    non_linear_model_df=model_df
+)
+
+print("Non-linear shunt compensators created")
+```
+</CodeGroup>
+
+### Adding Static VAR Compensators
+
+```python
+import pypowsybl as pp
+import pandas as pd
+
+network = pp.network.create_four_substations_node_breaker_network_with_extensions()
+
+# Define SVC parameters
+svc_data = pd.DataFrame.from_records(
+    index='id',
+    data=[{'id': 'svc_test',
+           'name': '',
+           'bus_or_busbar_section_id': 'S1VL1_BBS',
+           'position_order': 15,
+           'target_q': 200,
+           'regulation_mode': 'REACTIVE_POWER',
+           'regulating': True,
+           'target_v': 400,
+           'b_min': 0,
+           'b_max': 2}]
+)
+
+# Add SVC bay
+pp.network.create_static_var_compensator_bay(network, svc_data)
+
+svc = network.get_static_var_compensators().loc['svc_test']
+print(f"SVC created: mode={svc.regulation_mode}, target_q={svc.target_q} MVAr")
+```
+
+## Creating Voltage Level Topology
+
+### Node-Breaker Topology
+
+```python
+import pypowsybl as pp
+import pandas as pd
+
+network = pp.network.create_four_substations_node_breaker_network()
+
+# Create a new voltage level
+network.create_voltage_levels(
+    id='VL1', 
+    substation_id='S1', 
+    topology_kind='NODE_BREAKER', 
+    nominal_v=225
+)
+
+# Define topology with busbars and switches
+topology_df = pd.DataFrame.from_records(
+    index="id",
+    data=[{'id': 'VL1', 
+           'aligned_buses_or_busbar_count': 3, 
+           'switch_kinds': 'BREAKER, DISCONNECTOR'}]
+)
+
+# Create the topology
+pp.network.create_voltage_level_topology(network, topology_df)
+
+# Verify busbar sections were created
+busbar_sections = network.get_busbar_sections()
+vl1_busbars = busbar_sections[busbar_sections['voltage_level_id'] == 'VL1']
+print(f"Created {len(vl1_busbars)} busbar sections")
+
+# Check switches
+switches = network.get_node_breaker_topology('VL1').switches
+print(f"Created {len(switches)} switches")
+```
+
+### Bus-Breaker Topology
+
+```python
+import pypowsybl as pp
+
+network = pp.network.create_empty()
+
+# Create voltage level with bus-breaker topology
+network.create_voltage_levels(
+    id='VL1', 
+    topology_kind='BUS_BREAKER', 
+    nominal_v=225
+)
+
+# Create topology with multiple sections
+pp.network.create_voltage_level_topology(
+    network, 
+    id='VL1', 
+    aligned_buses_or_busbar_count=3, 
+    section_count=2
+)
+
+# Verify buses created
+buses = network.get_bus_breaker_topology('VL1').buses
+print(f"Created {len(buses)} buses")
+```
+
+## Creating Coupling Devices
+
+```python
+import pypowsybl as pp
+import pandas as pd
+
+network = pp.network.create_empty()
+network.create_substations(id='S1')
+network.create_voltage_levels(
+    id='VL1', 
+    substation_id='S1', 
+    topology_kind='NODE_BREAKER',
+    nominal_v=225
+)
+
+# Create busbar sections
+busbars = pd.DataFrame.from_records(
+    index='id',
+    data=[
+        {'voltage_level_id': 'VL1', 'id': 'BBS1', 'node': 0},
+        {'voltage_level_id': 'VL1', 'id': 'BBS2', 'node': 1},
+        {'voltage_level_id': 'VL1', 'id': 'BBS3', 'node': 2},
+    ]
+)
+network.create_busbar_sections(busbars)
+
+# Add busbar position extensions
+network.create_extensions(
+    'busbarSectionPosition',
+    id=['BBS1', 'BBS2', 'BBS3'],
+    busbar_index=[1, 2, 3],
+    section_index=[1, 1, 1]
+)
+
+# Create coupling device between busbars
+coupling_device = pd.DataFrame.from_records(
+    index='bus_or_busbar_section_id_1',
+    data=[{'bus_or_busbar_section_id_1': 'BBS1', 
+           'bus_or_busbar_section_id_2': 'BBS2'}]
+)
+
+pp.network.create_coupling_device(network, coupling_device)
+
+# Verify switches created
+switches = network.get_switches()
+print(f"Created {len(switches)} switches")
+print(f"Breakers: {len(switches[switches['kind'] == 'BREAKER'])}")
+print(f"Disconnectors: {len(switches[switches['kind'] == 'DISCONNECTOR'])}")
+```
+
+## Removing Components
+
+### Removing Feeder Bays
+
+```python
+import pypowsybl as pp
+import pandas as pd
+
+network = pp.network.create_four_substations_node_breaker_network()
+
+# Add a line
+line_data = pd.DataFrame(
+    index=['new_line'],
+    columns=['id', 'bus_or_busbar_section_id_1', 'bus_or_busbar_section_id_2',
+             'position_order_1', 'position_order_2', 'direction_1', 'direction_2',
+             'r', 'x', 'g1', 'g2', 'b1', 'b2'],
+    data=[['new_line', 'S1VL2_BBS1', 'S2VL1_BBS', 115, 121, 'TOP', 'TOP',
+            5.0, 50.0, 20.0, 30.0, 40.0, 50.0]]
+)
+pp.network.create_line_bays(network, line_data)
+
+print("Line and associated switches created")
+
+# Remove the feeder bay (line and all associated switches)
+pp.network.remove_feeder_bays(network, 'new_line')
+print("Feeder bay removed")
+
+# Verify removal
+assert 'new_line' not in network.get_lines().index
+print("Line successfully removed")
+```
+
+## Practical Example: Building a Network from Scratch
+
+```python
+import pypowsybl as pp
+import pandas as pd
+
+# Create empty network
+network = pp.network.create_empty("CustomNetwork")
+
+# Add substations
+network.create_substations(id=['S1', 'S2'], country=['FR', 'FR'])
+
+# Add voltage levels
+voltage_levels = pd.DataFrame.from_records(
+    index='id',
+    data=[
+        {'substation_id': 'S1', 'id': 'VL1', 'topology_kind': 'BUS_BREAKER', 'nominal_v': 400},
+        {'substation_id': 'S2', 'id': 'VL2', 'topology_kind': 'BUS_BREAKER', 'nominal_v': 400},
+    ]
+)
+network.create_voltage_levels(voltage_levels)
+
+# Create buses
+network.create_buses(
+    id=['VL1_BUS', 'VL2_BUS'],
+    voltage_level_id=['VL1', 'VL2']
+)
+
+# Add a generator
+network.create_generators(
+    id='GEN1',
+    voltage_level_id='VL1',
+    bus_id='VL1_BUS',
+    target_p=100,
+    target_v=400,
+    min_p=0,
+    max_p=200,
+    voltage_regulator_on=True
+)
+
+# Add a load
+network.create_loads(
+    id='LOAD1',
+    voltage_level_id='VL2',
+    bus_id='VL2_BUS',
+    p0=100,
+    q0=50
+)
+
+# Add a line connecting them
+network.create_lines(
+    id='LINE1',
+    voltage_level1_id='VL1',
+    voltage_level2_id='VL2',
+    bus1_id='VL1_BUS',
+    bus2_id='VL2_BUS',
+    r=0.5,
+    x=5.0,
+    g1=0.0,
+    b1=0.0,
+    g2=0.0,
+    b2=0.0
+)
+
+# Verify the network
+print(f"Network created: {network.id}")
+print(f"Substations: {len(network.get_substations())}")
+print(f"Voltage levels: {len(network.get_voltage_levels())}")
+print(f"Generators: {len(network.get_generators())}")
+print(f"Loads: {len(network.get_loads())}")
+print(f"Lines: {len(network.get_lines())}")
+
+# Run power flow
+result = pp.loadflow.run_ac(network)
+print(f"\nPower flow converged: {result[0].status}")
+```
+
+<Tip>
+  When building networks from scratch, always verify component connectivity and run a power flow to ensure the network is valid.
+</Tip>
+
+## Next Steps
+
+- Explore [IEEE Networks](/examples/ieee-networks) for standard test cases
+- Learn about [File Formats](/examples/file-formats) for saving your modifications
+- Try [Grid2Op Integration](/examples/grid2op-integration) for advanced scenarios

@@ -1,0 +1,579 @@
+---
+title: 'Sensitivity Analysis'
+description: 'Sensitivity factor analysis for power networks'
+---
+
+## Overview
+
+The Sensitivity Analysis module computes sensitivity factors that indicate how changes in one part of the network affect other parts. It calculates the relationship between variables (injections, tap positions, HVDC flows) and functions (branch flows, bus voltages).
+
+## Creating Sensitivity Analysis
+
+### create_dc_analysis
+
+Create a DC sensitivity analysis instance.
+
+```python
+pp.sensitivity.create_dc_analysis() -> DcSensitivityAnalysis
+```
+
+<ResponseField name="return" type="DcSensitivityAnalysis">
+  A new DC sensitivity analysis instance
+</ResponseField>
+
+### create_ac_analysis
+
+Create an AC sensitivity analysis instance.
+
+```python
+pp.sensitivity.create_ac_analysis() -> AcSensitivityAnalysis
+```
+
+<ResponseField name="return" type="AcSensitivityAnalysis">
+  A new AC sensitivity analysis instance
+</ResponseField>
+
+**Example:**
+
+```python
+import pypowsybl as pp
+
+network = pp.network.create_ieee14()
+dc_analysis = pp.sensitivity.create_dc_analysis()
+ac_analysis = pp.sensitivity.create_ac_analysis()
+```
+
+## SensitivityAnalysis Classes
+
+Both `DcSensitivityAnalysis` and `AcSensitivityAnalysis` inherit from the base `SensitivityAnalysis` class and share most methods.
+
+### Defining Factor Matrices
+
+#### add_branch_flow_factor_matrix
+
+Define sensitivity of branch active power flows to variables.
+
+```python
+analysis.add_branch_flow_factor_matrix(
+    branches_ids: List[str],
+    variables_ids: List[str],
+    matrix_id: str = 'default'
+)
+```
+
+<ParamField path="branches_ids" type="List[str]" required>
+  IDs of branches (lines, transformers) for which to compute sensitivities
+</ParamField>
+
+<ParamField path="variables_ids" type="List[str]" required>
+  Variables that may impact branch flows. Can be:
+  - Network element IDs (generators, loads, PSTs, dangling lines, HVDC lines)
+  - Zone IDs (for zonal analysis)
+  - Tuple of two zone IDs for power transfer between zones
+</ParamField>
+
+<ParamField path="matrix_id" type="str" default="default">
+  Unique identifier for the matrix, used to retrieve sensitivity values
+</ParamField>
+
+**Example:**
+
+```python
+import pypowsybl as pp
+
+network = pp.network.create_ieee14()
+analysis = pp.sensitivity.create_dc_analysis()
+
+# Define sensitivity of lines to generator injections
+analysis.add_branch_flow_factor_matrix(
+    branches_ids=['L1-2-1', 'L1-5-1', 'L2-3-1'],
+    variables_ids=['B1-G', 'B2-G', 'B3-G']
+)
+
+result = analysis.run(network)
+print(result.get_sensitivity_matrix())
+```
+
+#### add_precontingency_branch_flow_factor_matrix
+
+Define sensitivities for the base case (N situation) only.
+
+```python
+analysis.add_precontingency_branch_flow_factor_matrix(
+    branches_ids: List[str],
+    variables_ids: List[str],
+    matrix_id: str = 'default'
+)
+```
+
+Parameters are identical to `add_branch_flow_factor_matrix`.
+
+#### add_postcontingency_branch_flow_factor_matrix
+
+Define sensitivities for specific post-contingency states.
+
+```python
+analysis.add_postcontingency_branch_flow_factor_matrix(
+    branches_ids: List[str],
+    variables_ids: List[str],
+    contingencies_ids: List[str],
+    matrix_id: str = 'default'
+)
+```
+
+<ParamField path="branches_ids" type="List[str]" required>
+  IDs of branches to monitor
+</ParamField>
+
+<ParamField path="variables_ids" type="List[str]" required>
+  Variable IDs
+</ParamField>
+
+<ParamField path="contingencies_ids" type="List[str]" required>
+  List of contingency IDs for which to compute sensitivities
+</ParamField>
+
+<ParamField path="matrix_id" type="str" default="default">
+  Matrix identifier
+</ParamField>
+
+**Example:**
+
+```python
+# Add contingencies
+analysis.add_single_element_contingency('LINE_1_OUT', 'L1-2-1')
+
+# Define post-contingency sensitivities
+analysis.add_postcontingency_branch_flow_factor_matrix(
+    branches_ids=['L2-3-1', 'L2-4-1'],
+    variables_ids=['B1-G', 'B2-G'],
+    contingencies_ids=['LINE_1_OUT']
+)
+```
+
+#### add_factor_matrix
+
+Generic method to add any type of sensitivity factor matrix.
+
+```python
+analysis.add_factor_matrix(
+    functions_ids: List[str],
+    variables_ids: List[str],
+    contingencies_ids: List[str],
+    contingency_context_type: ContingencyContextType,
+    sensitivity_function_type: SensitivityFunctionType,
+    sensitivity_variable_type: SensitivityVariableType = SensitivityVariableType.AUTO_DETECT,
+    matrix_id: str = 'default'
+)
+```
+
+<ParamField path="functions_ids" type="List[str]" required>
+  IDs of network elements for which to compute sensitivity functions
+</ParamField>
+
+<ParamField path="variables_ids" type="List[str]" required>
+  IDs of variables
+</ParamField>
+
+<ParamField path="contingencies_ids" type="List[str]" required>
+  List of contingency IDs
+</ParamField>
+
+<ParamField path="contingency_context_type" type="ContingencyContextType" required>
+  When to compute sensitivities (ALL, NONE, SPECIFIC)
+</ParamField>
+
+<ParamField path="sensitivity_function_type" type="SensitivityFunctionType" required>
+  Type of function:
+  - `BRANCH_ACTIVE_POWER_1`: Active power at side 1 of a branch
+  - `BRANCH_ACTIVE_POWER_2`: Active power at side 2 of a branch
+  - `BRANCH_CURRENT_1`: Current at side 1 of a branch
+  - `BRANCH_CURRENT_2`: Current at side 2 of a branch
+  - `BUS_VOLTAGE`: Bus voltage magnitude
+</ParamField>
+
+<ParamField path="sensitivity_variable_type" type="SensitivityVariableType" default="AUTO_DETECT">
+  Type of variable:
+  - `AUTO_DETECT`: Automatically detect from element type
+  - `INJECTION_ACTIVE_POWER`: Active power injection
+  - `INJECTION_REACTIVE_POWER`: Reactive power injection
+  - `TRANSFORMER_PHASE`: Phase shift angle
+  - `BUS_TARGET_VOLTAGE`: Bus target voltage
+  - `HVDC_LINE_ACTIVE_POWER`: HVDC active power
+</ParamField>
+
+<ParamField path="matrix_id" type="str" default="default">
+  Matrix identifier
+</ParamField>
+
+### Zone Definition
+
+#### set_zones
+
+Define zones for zonal sensitivity analysis.
+
+```python
+analysis.set_zones(zones: List[Zone])
+```
+
+<ParamField path="zones" type="List[Zone]" required>
+  List of Zone objects defining network zones
+</ParamField>
+
+**Example:**
+
+```python
+from pypowsybl.sensitivity import create_zone_from_injections_and_shift_keys
+
+# Create zones
+zone1 = create_zone_from_injections_and_shift_keys(
+    'ZONE_1',
+    ['B1-G', 'B2-G'],
+    [0.5, 0.5]  # 50% distribution on each
+)
+
+zone2 = create_zone_from_injections_and_shift_keys(
+    'ZONE_2',
+    ['B3-G', 'B4-G'],
+    [0.6, 0.4]  # 60% / 40% distribution
+)
+
+analysis.set_zones([zone1, zone2])
+
+# Compute sensitivities for power transfer between zones
+analysis.add_branch_flow_factor_matrix(
+    branches_ids=['L1-2-1', 'L2-3-1'],
+    variables_ids=[('ZONE_1', 'ZONE_2')]  # Transfer from ZONE_1 to ZONE_2
+)
+```
+
+### Adding Contingencies
+
+Sensitivity analysis can include contingencies (inherited from ContingencyContainer).
+
+```python
+analysis.add_single_element_contingency(
+    contingency_id: str,
+    element_id: str
+)
+
+analysis.add_multiple_elements_contingency(
+    contingency_id: str,
+    element_ids: List[str]
+)
+```
+
+### Running Analysis
+
+#### run (DC and AC)
+
+Run the sensitivity analysis.
+
+```python
+analysis.run(
+    network: Network,
+    parameters: Parameters = None,
+    provider: str = '',
+    report_node: ReportNode = None
+) -> SensitivityAnalysisResult
+```
+
+<ParamField path="network" type="Network" required>
+  Network on which to run the sensitivity analysis
+</ParamField>
+
+<ParamField path="parameters" type="Parameters">
+  Sensitivity analysis parameters
+</ParamField>
+
+<ParamField path="provider" type="str" default="">
+  Provider name. If empty, uses default
+</ParamField>
+
+<ParamField path="report_node" type="ReportNode">
+  Reporter for execution reports
+</ParamField>
+
+<ResponseField name="return" type="SensitivityAnalysisResult">
+  Sensitivity analysis result containing sensitivity matrices
+</ResponseField>
+
+**Example:**
+
+```python
+import pypowsybl as pp
+
+network = pp.network.create_ieee14()
+analysis = pp.sensitivity.create_dc_analysis()
+
+analysis.add_branch_flow_factor_matrix(
+    branches_ids=['L1-2-1', 'L1-5-1'],
+    variables_ids=['B1-G', 'B2-G']
+)
+
+result = analysis.run(network)
+
+# Get sensitivity matrix as DataFrame
+sensitivities = result.get_sensitivity_matrix()
+print(sensitivities)
+```
+
+## Parameters
+
+### Parameters Class
+
+Configure sensitivity analysis execution.
+
+```python
+pp.sensitivity.Parameters(
+    load_flow_parameters: pp.loadflow.Parameters = None,
+    provider_parameters: dict = None
+)
+```
+
+<ParamField path="load_flow_parameters" type="pp.loadflow.Parameters">
+  Load flow parameters used for the analysis. See [Load Flow Parameters](/api-reference/loadflow#parameters-class)
+</ParamField>
+
+<ParamField path="provider_parameters" type="dict">
+  Provider-specific parameters as key-value pairs
+</ParamField>
+
+## Results
+
+### SensitivityAnalysisResult
+
+Base result class for sensitivity analysis.
+
+#### get_sensitivity_matrix
+
+Get the sensitivity matrix as a DataFrame.
+
+```python
+result.get_sensitivity_matrix(matrix_id: str = 'default') -> DataFrame
+```
+
+<ParamField path="matrix_id" type="str" default="default">
+  ID of the matrix to retrieve
+</ParamField>
+
+<ResponseField name="return" type="DataFrame">
+  DataFrame with sensitivity values. Rows represent functions (branches), columns represent variables (injections)
+</ResponseField>
+
+#### get_reference_matrix
+
+Get the reference values (base case flows) as a DataFrame.
+
+```python
+result.get_reference_matrix(matrix_id: str = 'default') -> DataFrame
+```
+
+<ParamField path="matrix_id" type="str" default="default">
+  ID of the matrix
+</ParamField>
+
+<ResponseField name="return" type="DataFrame">
+  DataFrame with reference flow values
+</ResponseField>
+
+### DcSensitivityAnalysisResult
+
+Result specific to DC sensitivity analysis.
+
+### AcSensitivityAnalysisResult
+
+Result specific to AC sensitivity analysis.
+
+**Example:**
+
+```python
+result = analysis.run(network)
+
+# Get sensitivities
+sensitivities = result.get_sensitivity_matrix()
+print("Sensitivity factors:")
+print(sensitivities)
+
+# Get reference flows
+reference = result.get_reference_matrix()
+print("\nReference flows (MW):")
+print(reference)
+
+# Access specific sensitivity
+if 'L1-2-1' in sensitivities.index and 'B1-G' in sensitivities.columns:
+    sensitivity = sensitivities.loc['L1-2-1', 'B1-G']
+    print(f"\nSensitivity of L1-2-1 to B1-G: {sensitivity:.4f} MW/MW")
+```
+
+## Zone Creation Utilities
+
+### create_empty_zone
+
+Create an empty zone.
+
+```python
+pp.sensitivity.create_empty_zone(id: str) -> Zone
+```
+
+<ParamField path="id" type="str" required>
+  Zone identifier
+</ParamField>
+
+<ResponseField name="return" type="Zone">
+  A new empty zone
+</ResponseField>
+
+### create_country_zone
+
+Create a zone containing all injections from a country.
+
+```python
+pp.sensitivity.create_country_zone(
+    network: Network,
+    id: str,
+    country: str
+) -> Zone
+```
+
+<ParamField path="network" type="Network" required>
+  The network
+</ParamField>
+
+<ParamField path="id" type="str" required>
+  Zone identifier
+</ParamField>
+
+<ParamField path="country" type="str" required>
+  Country code (e.g., 'FR', 'DE')
+</ParamField>
+
+<ResponseField name="return" type="Zone">
+  A zone containing all injections from the specified country
+</ResponseField>
+
+### create_zone_from_injections_and_shift_keys
+
+Create a zone from specific injections with shift keys.
+
+```python
+pp.sensitivity.create_zone_from_injections_and_shift_keys(
+    id: str,
+    injection_ids: List[str],
+    shift_keys: List[float]
+) -> Zone
+```
+
+<ParamField path="id" type="str" required>
+  Zone identifier
+</ParamField>
+
+<ParamField path="injection_ids" type="List[str]" required>
+  List of injection element IDs (generators, loads)
+</ParamField>
+
+<ParamField path="shift_keys" type="List[float]" required>
+  Distribution factors (should sum to 1.0). Defines how power changes are distributed across injections
+</ParamField>
+
+<ResponseField name="return" type="Zone">
+  A zone with the specified injections and distribution
+</ResponseField>
+
+### create_zones_from_glsk_file
+
+Create zones from a GLSK (Generation and Load Shift Keys) file.
+
+```python
+pp.sensitivity.create_zones_from_glsk_file(
+    network: Network,
+    glsk_file: str
+) -> List[Zone]
+```
+
+<ParamField path="network" type="Network" required>
+  The network
+</ParamField>
+
+<ParamField path="glsk_file" type="str" required>
+  Path to the GLSK file
+</ParamField>
+
+<ResponseField name="return" type="List[Zone]">
+  List of zones defined in the GLSK file
+</ResponseField>
+
+## Provider Management
+
+### get_provider_names
+
+Get the list of available sensitivity analysis providers.
+
+```python
+pp.sensitivity.get_provider_names() -> List[str]
+```
+
+<ResponseField name="return" type="List[str]">
+  List of available provider names
+</ResponseField>
+
+### get_default_provider
+
+Get the current default sensitivity analysis provider.
+
+```python
+pp.sensitivity.get_default_provider() -> str
+```
+
+<ResponseField name="return" type="str">
+  Name of the default provider
+</ResponseField>
+
+### set_default_provider
+
+Set the default sensitivity analysis provider.
+
+```python
+pp.sensitivity.set_default_provider(provider: str)
+```
+
+<ParamField path="provider" type="str" required>
+  Name of the provider to set as default
+</ParamField>
+
+## Enumerations
+
+### SensitivityFunctionType
+
+- `BRANCH_ACTIVE_POWER_1`: Active power at side 1 of a branch
+- `BRANCH_ACTIVE_POWER_2`: Active power at side 2 of a branch
+- `BRANCH_CURRENT_1`: Current magnitude at side 1
+- `BRANCH_CURRENT_2`: Current magnitude at side 2
+- `BUS_VOLTAGE`: Bus voltage magnitude
+
+### SensitivityVariableType
+
+- `AUTO_DETECT`: Automatically detect from element type
+- `INJECTION_ACTIVE_POWER`: Active power injection
+- `INJECTION_REACTIVE_POWER`: Reactive power injection
+- `TRANSFORMER_PHASE`: Phase shift transformer angle
+- `BUS_TARGET_VOLTAGE`: Bus voltage setpoint
+- `HVDC_LINE_ACTIVE_POWER`: HVDC line active power
+
+### ContingencyContextType
+
+- `ALL`: For all contingencies
+- `NONE`: Only for base case (N situation)
+- `SPECIFIC`: For specific contingencies
+
+### ZoneKeyType
+
+Type of shift keys for zone definition:
+- `GENERATOR_TARGET_P`
+- `GENERATOR_MAX_P`
+- `LOAD_P0`
+
+## See Also
+
+- [Security Analysis](/api-reference/security) - N-1 security analysis
+- [Load Flow](/api-reference/loadflow) - Power flow calculations

@@ -1,0 +1,334 @@
+---
+title: Short-Circuit Analysis
+description: Calculate fault currents and voltages for three-phase faults
+---
+
+Short-circuit analysis simulates faults on the network to determine fault currents and voltages. This is essential for protective relay coordination and equipment sizing.
+
+<Note>
+  PyPowSyBl currently does not include a built-in short-circuit simulator. You'll need to install a compatible provider to run analyses.
+</Note>
+
+## Overview
+
+Short-circuit analysis calculates:
+
+- **Fault currents**: Three-phase short-circuit currents
+- **Voltages during fault**: Voltage profile during the fault
+- **Feeder contributions**: Individual contributions to fault current
+- **Limit violations**: Equipment exceeding short-circuit ratings
+
+## Network Requirements
+
+The network must include short-circuit extensions on generators:
+
+```python
+import pypowsybl as pp
+
+# Networks need 'generatorShortCircuit' extension
+# with transient or subtransient reactance
+network = pp.network.create_four_substations_node_breaker_network()
+```
+
+## Parameters
+
+Configure the analysis with parameters:
+
+```python
+params = pp.shortcircuit.Parameters(
+    with_fortescue_result=False,
+    with_feeder_result=True,
+    with_limit_violations=True,
+    with_voltage_result=True,
+    min_voltage_drop_proportional_threshold=0,
+    study_type=pp.shortcircuit.ShortCircuitStudyType.TRANSIENT,
+    initial_voltage_profile_mode='NOMINAL'
+)
+```
+
+### Key Parameters
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `with_fortescue_result` | False | Return phase-detailed results (A, B, C) |
+| `with_feeder_result` | True | Calculate feeder contributions |
+| `with_limit_violations` | True | Detect limit violations |
+| `with_voltage_result` | True | Calculate voltage profile |
+| `min_voltage_drop_proportional_threshold` | 0 | Filter voltage results by drop threshold |
+| `study_type` | TRANSIENT | SUB_TRANSIENT, TRANSIENT, or STEADY_STATE |
+| `initial_voltage_profile_mode` | - | NOMINAL or PREVIOUS_VALUE |
+
+### Study Types
+
+<Accordion title="SUB_TRANSIENT">
+  Calculates fault currents immediately after fault occurrence using subtransient reactances. Highest fault current magnitude.
+</Accordion>
+
+<Accordion title="TRANSIENT (Default)">
+  Calculates fault currents during the transient period using transient reactances. Medium fault current magnitude.
+</Accordion>
+
+<Accordion title="STEADY_STATE">
+  Calculates steady-state fault currents using synchronous reactances. Lowest fault current magnitude.
+</Accordion>
+
+## Defining Faults
+
+Faults can be defined on buses or branches:
+
+### Bus Faults
+
+```python
+import pypowsybl.shortcircuit as sc
+import pandas as pd
+
+n = pp.network.create_four_substations_node_breaker_network()
+sc_analysis = sc.create_analysis()
+
+# Get buses
+buses = n.get_buses()
+
+# Create bus fault
+sc_analysis.set_faults(
+    id=['fault_1'], 
+    element_id=[buses.index[0]],
+    r=[1.0],  # Fault resistance (ohms)
+    x=[2.0]   # Fault reactance (ohms)
+)
+```
+
+### Branch Faults
+
+```python
+branches = n.get_branches()
+
+# Create branch fault at midpoint
+sc_analysis.set_faults(
+    id=['fault_2'],
+    element_id=[branches.index[0]],
+    r=[1.0],
+    x=[2.0],
+    proportional_location=[50]  # % from side 1 (0-100)
+)
+```
+
+### Default Fault Parameters
+
+| Parameter | Default Value |
+|-----------|---------------|
+| `r` (resistance) | 0 Ω |
+| `x` (reactance) | 0 Ω |
+| `proportional_location` | 50% |
+
+## Running Analysis
+
+<Steps>
+  <Step title="Create network">
+    ```python
+    import pypowsybl as pp
+    import pypowsybl.shortcircuit as sc
+    
+    n = pp.network.create_four_substations_node_breaker_network()
+    ```
+  </Step>
+  
+  <Step title="Configure parameters">
+    ```python
+    params = sc.Parameters(
+        with_feeder_result=False,
+        with_limit_violations=False,
+        study_type=sc.ShortCircuitStudyType.TRANSIENT
+    )
+    ```
+  </Step>
+  
+  <Step title="Create analysis and define faults">
+    ```python
+    sc_analysis = sc.create_analysis()
+    
+    buses = n.get_buses()
+    branches = n.get_branches()
+    
+    sc_analysis.set_faults(
+        id=['fault_1', 'fault_2'],
+        element_id=[buses.index[0], branches.index[0]],
+        r=[1, 1],
+        x=[2, 2]
+    )
+    ```
+  </Step>
+  
+  <Step title="Run analysis">
+    ```python
+    # results = sc_analysis.run(n, params, 'sc_provider_name')
+    ```
+  </Step>
+</Steps>
+
+<Warning>
+  You must provide a short-circuit provider name when calling `run()`. PyPowSyBl doesn't include a default provider.
+</Warning>
+
+## Analyzing Results
+
+Once you have a provider configured, the results include:
+
+### Fault Results
+
+```python
+# Fault currents and voltages for each fault
+results.fault_results
+```
+
+Contains:
+- Fault current magnitude and angle
+- Voltage magnitude and angle at fault location
+- Status (CONVERGED, FAILED)
+
+### Feeder Results
+
+```python
+# Contributions from each feeder
+results.feeder_results
+```
+
+Contains:
+- Current contribution from each feeder
+- Side of contribution (for branches)
+
+### Limit Violations
+
+```python
+# Equipment exceeding short-circuit limits
+results.limit_violations
+```
+
+Shows buses where fault current exceeds:
+- `ip_max`: Maximum admissible current
+- `ip_min`: Minimum admissible current
+
+(Stored in `identifiableShortCircuit` extension)
+
+### Voltage Results
+
+```python
+# Voltage profile on all buses
+results.voltage_results
+```
+
+Filtered by `min_voltage_drop_proportional_threshold`.
+
+## Complete Example
+
+```python
+import pypowsybl as pp
+import pypowsybl.shortcircuit as sc
+import pandas as pd
+
+# Create network
+n = pp.network.create_four_substations_node_breaker_network()
+
+# Configure parameters
+params = sc.Parameters(
+    with_feeder_result=True,
+    with_limit_violations=True,
+    with_voltage_result=True,
+    study_type=sc.ShortCircuitStudyType.TRANSIENT,
+    min_voltage_drop_proportional_threshold=0.1  # 10% drop
+)
+
+# Create analysis
+sc_analysis = sc.create_analysis()
+
+# Define multiple faults
+buses = n.get_buses()
+sc_analysis.set_faults(
+    id=['bus_fault_1', 'bus_fault_2'],
+    element_id=[buses.index[0], buses.index[1]],
+    r=[0.1, 0.1],
+    x=[0.5, 0.5]
+)
+
+# Run analysis (requires provider)
+# results = sc_analysis.run(n, params, 'provider_name')
+
+# Analyze results
+# print(results.fault_results)
+# print(results.feeder_results)
+# print(results.limit_violations)
+# print(results.voltage_results)
+```
+
+## Fortescue Components
+
+Enable detailed phase analysis:
+
+```python
+params = sc.Parameters(with_fortescue_result=True)
+
+# Results will include:
+# - Positive sequence components
+# - Negative sequence components  
+# - Zero sequence components
+# - Phase A, B, C values
+```
+
+<Note>
+  Fortescue (symmetrical component) analysis is useful for:
+  - Unbalanced fault analysis
+  - Protective relay coordination
+  - Detailed fault studies
+</Note>
+
+## Applications
+
+<Accordion title="Protective Device Coordination">
+  Use fault currents to:
+  - Set relay pickup levels
+  - Coordinate circuit breaker ratings
+  - Verify protection schemes
+  - Size fuses and breakers
+</Accordion>
+
+<Accordion title="Equipment Rating">
+  Verify equipment can withstand:
+  - Maximum fault currents
+  - Thermal stress
+  - Mechanical stress
+  - Specify equipment ratings
+</Accordion>
+
+<Accordion title="Grounding Design">
+  Analyze:
+  - Ground fault currents
+  - Touch and step voltages
+  - Grounding system adequacy
+  - Safety requirements
+</Accordion>
+
+## Troubleshooting
+
+<Accordion title="Missing generator extensions">
+  Ensure generators have the `generatorShortCircuit` extension with reactance values:
+  
+  ```python
+  # Check for extension
+  gen_sc = network.get_extension('generatorShortCircuit')
+  print(gen_sc[['direct_trans_x', 'direct_subtrans_x']])
+  ```
+</Accordion>
+
+<Accordion title="No provider available">
+  Install a compatible short-circuit provider. Check PowSyBl documentation for available implementations.
+</Accordion>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Dynamic Simulation" icon="wave-square" href="/user-guide/dynamic-simulation">
+    Time-domain stability analysis
+  </Card>
+  <Card title="Network Visualization" icon="chart-network" href="/user-guide/network-visualization">
+    Visualize your network
+  </Card>
+</CardGroup>

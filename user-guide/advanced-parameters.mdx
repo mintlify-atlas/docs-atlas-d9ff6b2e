@@ -1,0 +1,388 @@
+---
+title: Advanced Parameters
+description: Configure memory, performance, and runtime parameters for PyPowSyBl
+---
+
+PyPowSyBl is built on Java code compiled to native libraries using GraalVM. Understanding how to configure the runtime environment can help optimize performance for your use case.
+
+## Memory Configuration
+
+The underlying Java runtime (SubstrateVM) manages memory with a garbage collector. You can control memory allocation using the `GRAALVM_OPTIONS` environment variable.
+
+### Setting Maximum Heap Size
+
+By default, maximum memory is automatically determined based on your machine's available memory. To set a specific limit:
+
+```bash
+GRAALVM_OPTIONS="-Xmx1G" python
+```
+
+This limits the heap to 1 GB.
+
+### Verifying Memory Settings
+
+Enable debug logging to see the configured heap size:
+
+```python
+import logging
+
+logging.basicConfig()
+logging.getLogger('powsybl').setLevel(logging.DEBUG)
+
+import pypowsybl as pp
+# Output: DEBUG:powsybl:Max heap is 1086 MB
+```
+
+## Common Memory Configurations
+
+<CodeGroup>
+  ```bash Small Networks (< 1000 buses)
+  GRAALVM_OPTIONS="-Xmx1G" python
+  ```
+  
+  ```bash Medium Networks (1000-10000 buses)
+  GRAALVM_OPTIONS="-Xmx4G" python
+  ```
+  
+  ```bash Large Networks (> 10000 buses)
+  GRAALVM_OPTIONS="-Xmx16G" python
+  ```
+  
+  ```bash Auto (Default)
+  # No GRAALVM_OPTIONS set
+  # Automatically uses system-dependent value
+  python
+  ```
+</CodeGroup>
+
+## Environment Variables
+
+### Setting in Different Environments
+
+<Accordion title="Linux/macOS Shell">
+  Temporary (current session):
+  ```bash
+  export GRAALVM_OPTIONS="-Xmx4G"
+  python my_script.py
+  ```
+  
+  Permanent (add to `~/.bashrc` or `~/.zshrc`):
+  ```bash
+  echo 'export GRAALVM_OPTIONS="-Xmx4G"' >> ~/.bashrc
+  source ~/.bashrc
+  ```
+</Accordion>
+
+<Accordion title="Windows Command Prompt">
+  Temporary:
+  ```cmd
+  set GRAALVM_OPTIONS="-Xmx4G"
+  python my_script.py
+  ```
+  
+  Permanent:
+  ```cmd
+  setx GRAALVM_OPTIONS "-Xmx4G"
+  ```
+</Accordion>
+
+<Accordion title="Windows PowerShell">
+  Temporary:
+  ```powershell
+  $env:GRAALVM_OPTIONS="-Xmx4G"
+  python my_script.py
+  ```
+  
+  Permanent:
+  ```powershell
+  [System.Environment]::SetEnvironmentVariable('GRAALVM_OPTIONS','-Xmx4G','User')
+  ```
+</Accordion>
+
+<Accordion title="Jupyter Notebook">
+  ```python
+  import os
+  os.environ['GRAALVM_OPTIONS'] = '-Xmx4G'
+  
+  # Must be set BEFORE importing pypowsybl
+  import pypowsybl as pp
+  ```
+</Accordion>
+
+<Accordion title="Python Script">
+  ```python
+  import os
+  
+  # Set before importing pypowsybl
+  os.environ['GRAALVM_OPTIONS'] = '-Xmx4G'
+  
+  import pypowsybl as pp
+  # Rest of your code
+  ```
+</Accordion>
+
+## Advanced GraalVM Options
+
+### Garbage Collection Tuning
+
+```bash
+# Use serial GC (lower memory overhead)
+GRAALVM_OPTIONS="-Xmx4G --gc=serial" python
+
+# Use epsilon GC (no GC, for short-running tasks)
+GRAALVM_OPTIONS="-Xmx4G --gc=epsilon" python
+```
+
+### Multiple Options
+
+Combine multiple options:
+
+```bash
+GRAALVM_OPTIONS="-Xmx8G -Xms2G --gc=serial" python
+```
+
+Options:
+- `-Xmx`: Maximum heap size
+- `-Xms`: Initial heap size
+- `--gc`: Garbage collector type
+
+## Performance Optimization Tips
+
+<Steps>
+  <Step title="Start with default settings">
+    Let the automatic configuration determine initial heap size.
+  </Step>
+  
+  <Step title="Monitor memory usage">
+    Enable debug logging to see actual memory consumption:
+    ```python
+    import logging
+    logging.basicConfig()
+    logging.getLogger('powsybl').setLevel(logging.DEBUG)
+    ```
+  </Step>
+  
+  <Step title="Adjust as needed">
+    If you see OutOfMemoryError or excessive garbage collection:
+    - Increase `-Xmx` value
+    - Set `-Xms` closer to `-Xmx` to reduce reallocation
+  </Step>
+  
+  <Step title="Test performance">
+    Benchmark your specific workload with different settings.
+  </Step>
+</Steps>
+
+## Troubleshooting
+
+<Accordion title="OutOfMemoryError">
+  **Symptoms**: Program crashes with memory error
+  
+  **Solutions**:
+  1. Increase heap size:
+     ```bash
+     GRAALVM_OPTIONS="-Xmx8G" python
+     ```
+  
+  2. Process smaller chunks of data
+  
+  3. Use network reduction to limit network size:
+     ```python
+     network.reduce_by_voltage_range(v_min=225)
+     ```
+</Accordion>
+
+<Accordion title="Slow Performance">
+  **Symptoms**: Operations take longer than expected
+  
+  **Solutions**:
+  1. Increase initial heap size to reduce allocations:
+     ```bash
+     GRAALVM_OPTIONS="-Xmx8G -Xms4G" python
+     ```
+  
+  2. For short scripts, consider epsilon GC:
+     ```bash
+     GRAALVM_OPTIONS="-Xmx4G --gc=epsilon" python
+     ```
+  
+  3. Enable debug logging to identify bottlenecks
+</Accordion>
+
+<Accordion title="Settings Not Taking Effect">
+  **Symptoms**: Memory limits don't seem to apply
+  
+  **Solutions**:
+  1. Ensure variable is set **before** importing pypowsybl
+  
+  2. Verify the environment variable:
+     ```python
+     import os
+     print(os.environ.get('GRAALVM_OPTIONS'))
+     ```
+  
+  3. Restart Python interpreter/kernel
+</Accordion>
+
+## Platform-Specific Considerations
+
+### Docker Containers
+
+When running in Docker:
+
+```dockerfile
+FROM python:3.9
+
+# Set memory limit for container
+ENV GRAALVM_OPTIONS="-Xmx2G"
+
+RUN pip install pypowsybl
+
+COPY . /app
+WORKDIR /app
+
+CMD ["python", "analysis.py"]
+```
+
+Make sure Docker container has sufficient memory allocated.
+
+### Cluster/HPC Environments
+
+For SLURM or similar:
+
+```bash
+#!/bin/bash
+#SBATCH --mem=16G
+#SBATCH --cpus-per-task=4
+
+export GRAALVM_OPTIONS="-Xmx14G"
+python large_network_analysis.py
+```
+
+### Cloud Notebooks (Google Colab, etc.)
+
+```python
+import os
+
+# Set before importing pypowsybl
+os.environ['GRAALVM_OPTIONS'] = '-Xmx12G'
+
+import pypowsybl as pp
+```
+
+<Note>
+  Cloud platforms may have memory limits. Check your instance's available memory.
+</Note>
+
+## Recommended Configurations
+
+### Development
+
+```bash
+# Moderate memory, debug enabled
+export GRAALVM_OPTIONS="-Xmx2G"
+```
+
+```python
+import logging
+logging.basicConfig(format='%(asctime)s - %(levelname)s - %(message)s')
+logging.getLogger('powsybl').setLevel(logging.DEBUG)
+```
+
+### Production
+
+```bash
+# Higher memory, minimal logging
+export GRAALVM_OPTIONS="-Xmx8G -Xms4G"
+```
+
+```python
+import logging
+logging.basicConfig()
+logging.getLogger('powsybl').setLevel(logging.WARNING)
+```
+
+### Batch Processing
+
+```bash
+# Maximum memory, epsilon GC for short jobs
+export GRAALVM_OPTIONS="-Xmx16G --gc=epsilon"
+```
+
+### Interactive Analysis
+
+```bash
+# Moderate memory, info logging
+export GRAALVM_OPTIONS="-Xmx4G"
+```
+
+```python
+import logging
+logging.basicConfig()
+logging.getLogger('powsybl').setLevel(logging.INFO)
+```
+
+## Monitoring Memory Usage
+
+Track memory consumption in your scripts:
+
+```python
+import pypowsybl as pp
+import psutil
+import os
+
+def print_memory_usage():
+    process = psutil.Process(os.getpid())
+    mem_info = process.memory_info()
+    print(f"Memory usage: {mem_info.rss / 1024 / 1024:.2f} MB")
+
+print_memory_usage()
+network = pp.network.load('large_network.xiidm')
+print_memory_usage()
+
+result = pp.loadflow.run_ac(network)
+print_memory_usage()
+```
+
+## Best Practices
+
+<Accordion title="Set limits proactively">
+  Don't wait for memory errors. Estimate your needs:
+  - Small network (< 1000 buses): 1-2 GB
+  - Medium network (1000-10000 buses): 4-8 GB
+  - Large network (> 10000 buses): 16+ GB
+</Accordion>
+
+<Accordion title="Leave headroom">
+  Set heap size to 70-80% of available system memory:
+  ```bash
+  # For 16 GB system
+  GRAALVM_OPTIONS="-Xmx12G"
+  ```
+</Accordion>
+
+<Accordion title="Test with realistic data">
+  Use production-sized networks for testing memory requirements.
+</Accordion>
+
+<Accordion title="Document your configuration">
+  Include memory requirements in your project documentation:
+  ```markdown
+  ## Requirements
+  - Python 3.8+
+  - PyPowSyBl
+  - Minimum 8 GB RAM
+  - Recommended: `GRAALVM_OPTIONS="-Xmx6G"`
+  ```
+</Accordion>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Logging" icon="terminal" href="/user-guide/logging">
+    Configure detailed logging
+  </Card>
+  <Card title="Network" icon="diagram-project" href="/user-guide/network">
+    Back to network basics
+  </Card>
+</CardGroup>

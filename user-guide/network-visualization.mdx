@@ -1,0 +1,500 @@
+---
+title: Network Visualization
+description: Create single-line diagrams, network area diagrams, and interactive visualizations
+---
+
+PyPowSyBl provides powerful visualization tools to display power networks as diagrams and maps.
+
+## Single Line Diagrams
+
+Single line diagrams (SLD) show the detailed topology of substations and voltage levels.
+
+### Basic Usage
+
+<CodeGroup>
+  ```python Save to File
+  network = pp.network.create_ieee14()
+  network.write_single_line_diagram_svg('VL4', 'vl4.svg')
+  ```
+  
+  ```python Jupyter Notebook
+  network = pp.network.create_ieee14()
+  network.get_single_line_diagram('VL4')
+  ```
+</CodeGroup>
+
+### With Load Flow Results
+
+Display flows and voltages on the diagram:
+
+```python
+import pypowsybl as pp
+
+network = pp.network.create_ieee14()
+
+# Run load flow first
+result = pp.loadflow.run_ac(network)
+
+# Diagram will show P, Q, V values
+network.write_single_line_diagram_svg('VL4', 'vl4_with_flows.svg')
+```
+
+## Customizing with SldParameters
+
+Control diagram appearance and content:
+
+```python
+params = pp.network.SldParameters(
+    use_name=True,                    # Show names instead of IDs
+    center_name=False,                # Center feeder names
+    diagonal_label=False,             # Use diagonal labels
+    nodes_infos=True,                 # Show node info caption
+    tooltip_enabled=True,             # Enable tooltips
+    topological_coloring=True,        # Color by electrical node
+    component_library='Convergence',  # Component library
+    active_power_unit='MW',           # Power unit label
+    reactive_power_unit='MVAR',       # Reactive power unit
+    current_unit='A',                 # Current unit
+    display_current_feeder_info=False # Show current values
+)
+
+network.get_single_line_diagram('VL4', parameters=params)
+```
+
+### Parameter Examples
+
+<Accordion title="Use Names Instead of IDs">
+  ```python
+  params = pp.network.SldParameters(use_name=True)
+  network.get_single_line_diagram('VL4', parameters=params)
+  ```
+  
+  Shows equipment names instead of IDs when available.
+</Accordion>
+
+<Accordion title="Topological Coloring">
+  ```python
+  network = pp.network.create_four_substations_node_breaker_network()
+  network.update_switches(id='S1VL2_COUPLER', open=True)
+  
+  params = pp.network.SldParameters(topological_coloring=True)
+  network.get_single_line_diagram('S1VL2', parameters=params)
+  ```
+  
+  Each electrical node gets a different color.
+</Accordion>
+
+<Accordion title="Component Libraries">
+  ```python
+  # Use FlatDesign library
+  params = pp.network.SldParameters(component_library='FlatDesign')
+  network.get_single_line_diagram('VL4', parameters=params)
+  ```
+  
+  Available libraries: `Convergence`, `FlatDesign`
+</Accordion>
+
+<Accordion title="Display Current Values">
+  ```python
+  params = pp.network.SldParameters(
+      display_current_feeder_info=True,
+      current_unit='A'
+  )
+  network.get_single_line_diagram('VL4', parameters=params)
+  ```
+</Accordion>
+
+## Multi-Substation Diagrams
+
+Display multiple substations in a grid layout:
+
+```python
+network = pp.network.create_ieee14()
+result = pp.loadflow.run_ac(network)
+
+# Create 2x2 grid
+network.write_matrix_multi_substation_single_line_diagram_svg(
+    [['S1', 'S2'], ['S3', 'S4']], 
+    's1_s2_s3_s4.svg'
+)
+
+# Or in Jupyter
+network.get_matrix_multi_substation_single_line_diagram(
+    [['S1', 'S2'], ['S3', 'S4']]
+)
+```
+
+<Note>
+  Use empty strings `''` in the matrix to create empty spots in the grid.
+</Note>
+
+## Advanced Customization with SldProfile
+
+Fine-grained control over labels and styles:
+
+```python
+import pandas as pd
+
+network = pp.network.create_ieee14()
+
+# Define custom labels
+labels_df = pd.DataFrame.from_records(
+    index='id',
+    columns=['id', 'label', 'additional_label'],
+    data=[
+        ('B1-G', 'MY-GENERATOR', 'GEN'),
+        ('L1-5-1', 'MY-LINE1', None),
+        ('L1-2-1', 'MY-LINE2', None),
+        ('B1', 'MY-BUS1', None)
+    ]
+)
+
+# Define feeder info (arrows and labels)
+feeders_info_df = pd.DataFrame.from_records(
+    index='id',
+    columns=['id', 'type', 'side', 'direction', 'label'],
+    data=[
+        ('L1-5-1', 'ARROW_ACTIVE', 'ONE', 'IN', 'ACTIVE1'),
+        ('L1-5-1', 'ARROW_REACTIVE', 'ONE', 'OUT', 'REACTIVE1'),
+        ('L1-2-1', 'ARROW_CURRENT', 'ONE', 'IN', 'CURRENT1')
+    ]
+)
+
+# Define custom styles
+styles_df = pd.DataFrame.from_records(
+    index='id',
+    columns=['id', 'color', 'bus_width', 'width', 'dash'],
+    data=[('B1', 'orange', '4px', '2px', '')]
+)
+
+# Create profile
+profile = pp.network.SldProfile(
+    labels=labels_df,
+    feeders_info=feeders_info_df,
+    styles=styles_df
+)
+
+network.get_single_line_diagram('VL1', sld_profile=profile)
+```
+
+### Profile DataFrames
+
+**Labels DataFrame:**
+- `id`: Network element ID
+- `label`: Main label text
+- `additional_label`: Additional label (right side)
+
+**Feeders Info DataFrame:**
+- `id`: Feeder ID
+- `type`: `ARROW_ACTIVE`, `ARROW_REACTIVE`, `ARROW_CURRENT`
+- `side`: `ONE`, `TWO` (for multi-terminal equipment)
+- `direction`: `IN`, `OUT`
+- `label`: Label text
+
+**Styles DataFrame:**
+- `id`: Bus ID
+- `color`: Color name or hex
+- `bus_width`: Bus line width
+- `width`: Connected element width
+- `dash`: Dash pattern (e.g., `'5,5'` for dashed)
+
+## Network Area Diagrams
+
+Network area diagrams (NAD) show the overall network topology.
+
+### Full Network Diagram
+
+```python
+network = pp.network.create_ieee9()
+
+# Save to file
+network.write_network_area_diagram_svg('ieee9.svg')
+
+# Or display in Jupyter
+network.get_network_area_diagram()
+```
+
+### Sub-Network Diagram
+
+Display part of the network using depth and voltage filters:
+
+```python
+network = pp.network.create_ieee300()
+
+# Center on VL1 with depth=1
+network.write_network_area_diagram_svg('ieee300.svg', 'VL1', 1)
+
+# With voltage bounds
+network.write_network_area_diagram_svg(
+    'ieee300_filtered.svg',
+    'VL1',
+    depth=1,
+    low_nominal_voltage_bound=90,
+    high_nominal_voltage_bound=240
+)
+```
+
+### NAD Parameters
+
+Customize appearance:
+
+```python
+from pypowsybl.network import NadParameters, EdgeInfoType
+
+params = NadParameters(
+    edge_name_displayed=True,           # Show line names
+    id_displayed=False,                 # Show names (not IDs)
+    edge_info_along_edge=True,          # Info along edge
+    power_value_precision=1,            # Decimal places for P
+    angle_value_precision=0,            # Decimal places for angle
+    current_value_precision=1,          # Decimal places for I
+    voltage_value_precision=0,          # Decimal places for V
+    bus_legend=True,                    # Show voltage legend
+    substation_description_displayed=True,  # Show substation names
+    edge_info_displayed=EdgeInfoType.ACTIVE_POWER,  # What to show
+    voltage_level_details=False,        # Detailed VL info
+    injections_added=True               # Show injections
+)
+
+network.get_network_area_diagram('VL6', nad_parameters=params)
+```
+
+### Edge Info Types
+
+- `EdgeInfoType.ACTIVE_POWER`: Show active power (default)
+- `EdgeInfoType.REACTIVE_POWER`: Show reactive power
+- `EdgeInfoType.CURRENT`: Show current
+
+## Fixed Positions
+
+Specify exact positions for voltage levels:
+
+```python
+import pandas as pd
+
+network = pp.network.create_ieee9()
+
+pos_df = pd.DataFrame.from_records(
+    index='id',
+    columns=['id', 'x', 'y', 'legend_shift_x', 'legend_shift_y',
+             'legend_connection_shift_x', 'legend_connection_shift_y'],
+    data=[
+        ('VL5',  10.0, 20.0, 80.0, -30, 80.0, 0),
+        ('VL6', 400.0, 20.0, 80.0, -30, 80.0, 0),
+        ('VL8', 800.0, 20.0, 80.0, -30, 80.0, 0)
+    ]
+)
+
+network.get_network_area_diagram(fixed_positions=pos_df)
+```
+
+## NAD Profile
+
+Advanced customization of NAD diagrams:
+
+```python
+import pandas as pd
+
+network = pp.network.create_four_substations_node_breaker_network()
+
+# Branch labels and arrows
+labels_df = pd.DataFrame.from_records(
+    index='id',
+    columns=['id', 'side1', 'middle', 'side2', 'arrow1', 'arrow2'],
+    data=[
+        ('LINE_S2S3', 'L1_1', 'L1', 'L1_2', 'IN', 'IN'),
+        ('LINE_S3S4', 'L2_1', 'L2', 'L2_2', 'OUT', 'IN'),
+        ('TWT', 'TWT1_1', 'TWT1', 'TWT1_2', None, 'OUT')
+    ]
+)
+
+# Voltage level descriptions
+vl_descriptions_df = pd.DataFrame.from_records(
+    index='id',
+    data=[
+        {'id': 'S1VL1', 'type': 'HEADER', 'description': 'VL A'},
+        {'id': 'S1VL1', 'type': 'FOOTER', 'description': 'VL A footer'},
+        {'id': 'S1VL2', 'type': 'HEADER', 'description': 'VL B'}
+    ]
+)
+
+# Bus descriptions
+bus_descriptions_df = pd.DataFrame.from_records(
+    index='id',
+    data=[
+        {'id': 'S1VL1_0', 'description': 'BUS A'},
+        {'id': 'S1VL2_0', 'description': 'BUS B'}
+    ]
+)
+
+# Bus styles
+bus_node_style_df = pd.DataFrame.from_records(
+    index='id',
+    data=[
+        {'id': 'S1VL1_0', 'fill': 'red', 'edge': 'black', 'edge-width': '4px'},
+        {'id': 'S1VL2_0', 'fill': 'blue', 'edge': 'black', 'edge-width': '4px'}
+    ]
+)
+
+# Edge styles
+edge_style_df = pd.DataFrame.from_records(
+    index='id',
+    data=[
+        {'id': 'LINE_S2S3', 'edge1': 'blue', 'width1': '16px', 'dash1': '12,12',
+         'edge2': 'blue', 'width2': '16px', 'dash2': '12,12'},
+        {'id': 'LINE_S3S4', 'edge1': 'green', 'width1': '3px',
+         'edge2': 'green', 'width2': '3px'}
+    ]
+)
+
+profile = pp.network.NadProfile(
+    branch_labels=labels_df,
+    vl_descriptions=vl_descriptions_df,
+    bus_descriptions=bus_descriptions_df,
+    bus_node_styles=bus_node_style_df,
+    edge_styles=edge_style_df
+)
+
+pars = pp.network.NadParameters(edge_name_displayed=True)
+network.get_network_area_diagram(
+    voltage_level_ids='S1VL1',
+    depth=2,
+    nad_parameters=pars,
+    nad_profile=profile
+)
+```
+
+### Default NAD Profile
+
+Get a pre-filled profile as a starting point:
+
+```python
+default_profile = network.get_default_nad_profile()
+
+# Modify specific labels
+default_profile.branch_labels.loc['LINE1', 'middle'] = 'My Line'
+
+network.get_network_area_diagram(nad_profile=default_profile)
+```
+
+## Geographical Layout
+
+Use geographical coordinates for realistic layouts.
+
+### Load Network with Geo Data
+
+```python
+# Load CGMES with geographical layout profile
+network = pp.network.load(
+    'MicroGridTestConfiguration_T4_BE_BB_Complete_v2.zip',
+    {'iidm.import.cgmes.post-processors': 'cgmesGLImport'}
+)
+
+# Check loaded positions
+print(network.get_extension('substationPosition'))
+print(network.get_extension('linePosition'))
+```
+
+### Use Geographical Layout
+
+```python
+from pypowsybl.network import NadLayoutType
+
+params = pp.network.NadParameters(
+    layout_type=NadLayoutType.GEOGRAPHICAL
+)
+
+network.write_network_area_diagram('geo_layout.svg', nad_parameters=params)
+```
+
+<Note>
+  Geographical layout requires `substationPosition` and `linePosition` extensions in the network.
+</Note>
+
+## Interactive Jupyter Widgets
+
+Explore networks interactively in Jupyter notebooks.
+
+### Installation
+
+```bash
+pip install pypowsybl_jupyter
+jupyter lab
+```
+
+### Using the Network Explorer
+
+```python
+from pypowsybl_jupyter import NetworkExplorer
+
+network = pp.network.create_ieee14()
+explorer = NetworkExplorer(network)
+explorer
+```
+
+Features three tabs:
+
+<Accordion title="Network Area Diagram Tab">
+  - Select voltage level from list
+  - Adjust depth with slider
+  - Interactive navigation
+</Accordion>
+
+<Accordion title="Single Line Diagram Tab">
+  - Select voltage level
+  - Navigate between voltage levels with arrows
+  - Detailed substation view
+</Accordion>
+
+<Accordion title="Map Viewer Tab">
+  - Geographical map with background
+  - Filter by nominal voltage
+  - Click to select substations
+  - Requires geographical extensions
+</Accordion>
+
+## Helper Functions
+
+### Get Displayed Voltage Levels
+
+Find which voltage levels will be shown:
+
+```python
+network = pp.network.create_ieee300()
+vl_list = network.get_network_area_diagram_displayed_voltage_levels('VL1', 1)
+print(vl_list)
+```
+
+## Best Practices
+
+<Accordion title="Performance">
+  - Use depth limits for large networks
+  - Filter by voltage level for clarity
+  - Export to SVG for scalable graphics
+  - Use fixed positions for consistent layouts
+</Accordion>
+
+<Accordion title="Presentation">
+  - Run load flow before visualization
+  - Choose appropriate precision for values
+  - Use topological coloring for clarity
+  - Add units to power/voltage labels
+</Accordion>
+
+<Accordion title="Documentation">
+  - Customize labels for clarity
+  - Add descriptions to voltage levels
+  - Use meaningful colors and styles
+  - Export diagrams for reports
+</Accordion>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Per Unit" icon="calculator" href="/user-guide/per-unit">
+    Work with per-unit values
+  </Card>
+  <Card title="Advanced Parameters" icon="sliders" href="/user-guide/advanced-parameters">
+    Configure memory and performance
+  </Card>
+</CardGroup>

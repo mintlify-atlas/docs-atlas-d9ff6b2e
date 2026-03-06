@@ -1,0 +1,277 @@
+---
+title: 'GLSK (Generation and Load Shift Keys)'
+description: 'API reference for GLSK module'
+---
+
+## Overview
+
+The GLSK (Generation and Load Shift Keys) module provides functionality to load and manipulate GLSK documents. GLSK factors define how power injections are distributed across generators and loads in different countries or zones for sensitivity analysis and capacity calculation.
+
+## Main Classes
+
+### GLSKDocument
+
+Represents a loaded GLSK file with access to underlying data.
+
+```python
+from pypowsybl.glsk import load
+
+glsk_document = load('glsk_file.xml')
+```
+
+#### Methods
+
+<ParamField path="get_gsk_time_interval_start" type="method">
+  Get the start time of the GSK time interval.
+
+  **Returns:** datetime - Start timestamp of the GLSK factors
+
+  **Example:**
+  ```python
+  start_time = glsk_document.get_gsk_time_interval_start()
+  print(f"GLSK valid from: {start_time}")
+  ```
+</ParamField>
+
+<ParamField path="get_gsk_time_interval_end" type="method">
+  Get the end time of the GSK time interval.
+
+  **Returns:** datetime - End timestamp of the GLSK factors
+
+  **Example:**
+  ```python
+  end_time = glsk_document.get_gsk_time_interval_end()
+  print(f"GLSK valid until: {end_time}")
+  ```
+</ParamField>
+
+<ParamField path="get_countries" type="method">
+  Get list of countries defined in the GLSK document.
+
+  **Returns:** List[str] - List of country codes
+
+  **Example:**
+  ```python
+  countries = glsk_document.get_countries()
+  print(f"Countries: {countries}")
+  # Output: Countries: ['FR', 'DE', 'BE', 'NL']
+  ```
+</ParamField>
+
+<ParamField path="get_points_for_country" type="method">
+  Get injection points (generators/loads) for a specific country at a given instant.
+
+  **Parameters:**
+  - `network` (Network): Network object
+  - `country` (str): Country code
+  - `instant` (datetime): Time instant for which to get injection points
+
+  **Returns:** List[str] - List of injection point IDs
+
+  **Example:**
+  ```python
+  from datetime import datetime
+  
+  instant = datetime(2024, 1, 15, 10, 0)
+  points = glsk_document.get_points_for_country(
+      network=network,
+      country='FR',
+      instant=instant
+  )
+  print(f"Injection points in FR: {points}")
+  ```
+</ParamField>
+
+<ParamField path="get_glsk_factors" type="method">
+  Get GLSK factors for a specific country at a given instant.
+
+  GLSK factors define the participation of each injection point in the power shift.
+
+  **Parameters:**
+  - `network` (Network): Network object
+  - `country` (str): Country code
+  - `instant` (datetime): Time instant for which to get GLSK factors
+
+  **Returns:** List[float] - GLSK factors corresponding to injection points
+
+  **Example:**
+  ```python
+  factors = glsk_document.get_glsk_factors(
+      network=network,
+      country='FR',
+      instant=instant
+  )
+  
+  # Combine with injection points
+  points = glsk_document.get_points_for_country(network, 'FR', instant)
+  for point, factor in zip(points, factors):
+      print(f"{point}: {factor:.4f}")
+  ```
+</ParamField>
+
+## Utility Functions
+
+<ParamField path="load" type="function">
+  Load a GLSK file.
+
+  **Parameters:**
+  - `file` (str or PathLike): Path to the GLSK file (XML format)
+
+  **Returns:** GLSKDocument
+
+  **Example:**
+  ```python
+  from pypowsybl.glsk import load
+  
+  glsk_document = load('path/to/glsk_file.xml')
+  ```
+</ParamField>
+
+## Complete Example
+
+```python
+import pypowsybl as pp
+from pypowsybl.glsk import load
+from datetime import datetime
+
+# Load network
+network = pp.network.load('network.xiidm')
+
+# Load GLSK document
+glsk = load('glsk_file.xml')
+
+# Get time interval
+start = glsk.get_gsk_time_interval_start()
+end = glsk.get_gsk_time_interval_end()
+print(f"GLSK valid from {start} to {end}")
+
+# Get countries
+countries = glsk.get_countries()
+print(f"Countries in GLSK: {countries}")
+
+# Get GLSK data for a specific country and time
+instant = datetime(2024, 1, 15, 10, 0)
+country = 'FR'
+
+# Get injection points
+points = glsk.get_points_for_country(network, country, instant)
+print(f"\nInjection points for {country}:")
+for point in points:
+    print(f"  - {point}")
+
+# Get GLSK factors
+factors = glsk.get_glsk_factors(network, country, instant)
+print(f"\nGLSK factors for {country}:")
+for point, factor in zip(points, factors):
+    print(f"  {point}: {factor:.4f}")
+
+# Process all countries
+print("\nAll GLSK factors:")
+for country in countries:
+    points = glsk.get_points_for_country(network, country, instant)
+    factors = glsk.get_glsk_factors(network, country, instant)
+    print(f"\n{country}:")
+    for point, factor in zip(points, factors):
+        if abs(factor) > 0.001:  # Filter small factors
+            print(f"  {point}: {factor:.4f}")
+```
+
+## Usage with Flow Decomposition
+
+GLSK documents are commonly used with flow decomposition for capacity calculation:
+
+```python
+import pypowsybl as pp
+from pypowsybl.glsk import load
+from pypowsybl.flowdecomposition import create_decomposition
+
+# Load network and GLSK
+network = pp.network.load('network.xiidm')
+glsk = load('glsk_file.xml')
+
+# Create flow decomposition
+flow_decomp = create_decomposition()
+flow_decomp.add_monitored_elements(['LINE1', 'LINE2'])
+
+# Run flow decomposition
+# Note: GLSK is used internally by the flow decomposition algorithm
+result = flow_decomp.run(network)
+```
+
+## Usage with RAO
+
+GLSK documents can be used with RAO for loop flow computation:
+
+```python
+from pypowsybl.rao import create_rao, Crac
+from pypowsybl.glsk import load
+
+# Load network, CRAC, and GLSK
+network = pp.network.load('network.xiidm')
+crac = Crac.from_file_source(network, 'crac.json')
+glsk = load('glsk_file.xml')
+
+# Run RAO with loop flow GLSK
+rao = create_rao()
+result = rao.run(
+    crac=crac,
+    network=network,
+    loop_flow_glsk=glsk
+)
+```
+
+## GLSK File Format
+
+GLSK files are typically XML files following the ENTSO-E format:
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<GLSKDocument xmlns="..." ...>
+  <TimeSeries>
+    <mRID>GLSK-FR-...</mRID>
+    <businessType>B43</businessType>
+    <area.Domain>
+      <mRID codingScheme="...">10YFR-RTE------C</mRID>
+    </area.Domain>
+    <Period>
+      <timeInterval>
+        <start>2024-01-15T00:00Z</start>
+        <end>2024-01-15T23:59Z</end>
+      </timeInterval>
+      <Point>
+        <position>1</position>
+        <Quantity>
+          <quantity>0.5</quantity>
+        </Quantity>
+      </Point>
+    </Period>
+  </TimeSeries>
+</GLSKDocument>
+```
+
+## Key Concepts
+
+### GLSK Factors
+
+GLSK factors are normalized weights that sum to 1.0 for each country/zone. They define how a power shift in a zone is distributed among generators and loads:
+
+- A factor of 0.5 means the injection point participates at 50% in the power shift
+- Positive factors typically apply to generators (increase production)
+- Negative factors typically apply to loads (decrease consumption)
+- The sum of absolute values of factors for a zone equals 1.0
+
+### Time Resolution
+
+GLSK documents can have different time resolutions:
+- Hourly: Different GLSK factors for each hour
+- Daily: Same factors for an entire day
+- Monthly: Same factors for an entire month
+
+Use the appropriate instant/timestamp when querying GLSK factors.
+
+## Notes
+
+- GLSK files must be in XML format following ENTSO-E standards
+- The instant parameter in methods should fall within the valid time interval
+- GLSK factors are used for linearized sensitivity calculations
+- Factors are country/zone-specific and time-dependent

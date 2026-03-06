@@ -1,0 +1,563 @@
+---
+title: Grid2Op Integration
+description: Learn how to use PyPowSyBl with Grid2Op for reinforcement learning applications
+---
+
+PyPowSyBl provides a Grid2Op backend that allows you to use PyPowSyBl's power system simulation capabilities with Grid2Op's reinforcement learning framework. This integration enables training RL agents for power grid operations.
+
+## What is Grid2Op?
+
+Grid2Op is a platform for developing and testing reinforcement learning algorithms for power grid operation. PyPowSyBl can serve as a backend engine, providing accurate power flow simulations for Grid2Op environments.
+
+## Getting Started
+
+### Creating a Grid2Op Backend
+
+```python
+import pypowsybl as pp
+from pypowsybl import grid2op
+
+# Create a network
+network = pp.network.create_eurostag_tutorial_example1_network()
+
+# Run initial power flow
+pp.loadflow.run_ac(network)
+
+# Create Grid2Op backend
+with grid2op.Backend(network) as backend:
+    # Backend is ready to use
+    print(f"Backend initialized for network: {backend.network.id}")
+```
+
+### Backend Configuration Options
+
+```python
+import pypowsybl as pp
+from pypowsybl import grid2op
+
+network = pp.network.create_ieee14()
+pp.loadflow.run_ac(network)
+
+# Create backend with custom options
+with grid2op.Backend(
+    network,
+    consider_open_branch_reactive_flow=False,
+    check_isolated_and_disconnected_injections=True,
+    buses_per_voltage_level=2,
+    connect_all_elements_to_first_bus=True
+) as backend:
+    print("Backend created with custom configuration")
+```
+
+<Note>
+  The Grid2Op backend uses a context manager (`with` statement) to ensure proper resource cleanup.
+</Note>
+
+## Reading Network Data
+
+### Getting String Values
+
+<Steps>
+  <Step title="Import value types">
+    ```python
+    import pypowsybl as pp
+    from pypowsybl import grid2op
+    import numpy as np
+    ```
+  </Step>
+
+  <Step title="Create backend and query data">
+    ```python
+    network = pp.network.create_eurostag_tutorial_example1_network()
+    pp.loadflow.run_ac(network)
+    
+    with grid2op.Backend(network) as backend:
+        # Get voltage level names
+        vl_names = backend.get_string_value(grid2op.StringValueType.VOLTAGE_LEVEL_NAME)
+        print("Voltage levels:", vl_names)
+        # Output: ['VLGEN', 'VLHV1', 'VLHV2', 'VLLOAD']
+        
+        # Get load names
+        load_names = backend.get_string_value(grid2op.StringValueType.LOAD_NAME)
+        print("Loads:", load_names)
+        # Output: ['LOAD']
+        
+        # Get generator names
+        gen_names = backend.get_string_value(grid2op.StringValueType.GENERATOR_NAME)
+        print("Generators:", gen_names)
+        # Output: ['GEN', 'GEN2']
+        
+        # Get branch names
+        branch_names = backend.get_string_value(grid2op.StringValueType.BRANCH_NAME)
+        print("Branches:", branch_names)
+        # Output: ['NGEN_NHV1', 'NHV1_NHV2_1', 'NHV1_NHV2_2', 'NHV2_NLOAD']
+    ```
+  </Step>
+</Steps>
+
+### Getting Integer Values
+
+```python
+import pypowsybl as pp
+from pypowsybl import grid2op
+
+network = pp.network.create_eurostag_tutorial_example1_network()
+pp.loadflow.run_ac(network)
+
+with grid2op.Backend(network) as backend:
+    # Get voltage level numbers for loads
+    load_vl_nums = backend.get_integer_value(grid2op.IntegerValueType.LOAD_VOLTAGE_LEVEL_NUM)
+    print("Load voltage level numbers:", load_vl_nums)
+    # Output: [3]
+    
+    # Get voltage level numbers for generators
+    gen_vl_nums = backend.get_integer_value(grid2op.IntegerValueType.GENERATOR_VOLTAGE_LEVEL_NUM)
+    print("Generator voltage level numbers:", gen_vl_nums)
+    # Output: [0, 0]
+    
+    # Get branch voltage level numbers (both ends)
+    branch_vl1 = backend.get_integer_value(grid2op.IntegerValueType.BRANCH_VOLTAGE_LEVEL_NUM_1)
+    branch_vl2 = backend.get_integer_value(grid2op.IntegerValueType.BRANCH_VOLTAGE_LEVEL_NUM_2)
+    print("Branch voltage levels:")
+    print("  Side 1:", branch_vl1)
+    print("  Side 2:", branch_vl2)
+    
+    # Get topology vector
+    topo_vect = backend.get_integer_value(grid2op.IntegerValueType.TOPO_VECT)
+    print("Topology vector:", topo_vect)
+```
+
+### Getting Power Flow Results
+
+<CodeGroup>
+```python Load Values
+import pypowsybl as pp
+from pypowsybl import grid2op
+import numpy as np
+
+network = pp.network.create_eurostag_tutorial_example1_network()
+pp.loadflow.run_ac(network)
+
+with grid2op.Backend(network) as backend:
+    # Get load active power
+    load_p = backend.get_double_value(grid2op.DoubleValueType.LOAD_P)
+    print(f"Load P: {load_p} MW")
+    
+    # Get load reactive power
+    load_q = backend.get_double_value(grid2op.DoubleValueType.LOAD_Q)
+    print(f"Load Q: {load_q} MVAr")
+    
+    # Get load voltage magnitude
+    load_v = backend.get_double_value(grid2op.DoubleValueType.LOAD_V)
+    print(f"Load voltage: {load_v} kV")
+    
+    # Get load voltage angle
+    load_angle = backend.get_double_value(grid2op.DoubleValueType.LOAD_ANGLE)
+    print(f"Load angle: {load_angle} rad")
+```
+
+```python Generator Values
+import pypowsybl as pp
+from pypowsybl import grid2op
+
+network = pp.network.create_eurostag_tutorial_example1_network()
+pp.loadflow.run_ac(network)
+
+with grid2op.Backend(network) as backend:
+    # Get generator active power
+    gen_p = backend.get_double_value(grid2op.DoubleValueType.GENERATOR_P)
+    print(f"Generator P: {gen_p} MW")
+    
+    # Get generator reactive power
+    gen_q = backend.get_double_value(grid2op.DoubleValueType.GENERATOR_Q)
+    print(f"Generator Q: {gen_q} MVAr")
+    
+    # Get generator voltage
+    gen_v = backend.get_double_value(grid2op.DoubleValueType.GENERATOR_V)
+    print(f"Generator voltage: {gen_v} kV")
+    
+    # Get generator voltage angle
+    gen_angle = backend.get_double_value(grid2op.DoubleValueType.GENERATOR_ANGLE)
+    print(f"Generator angle: {gen_angle} rad")
+```
+
+```python Branch Flows
+import pypowsybl as pp
+from pypowsybl import grid2op
+
+network = pp.network.create_eurostag_tutorial_example1_network()
+pp.loadflow.run_ac(network)
+
+with grid2op.Backend(network) as backend:
+    # Get branch flows from both ends
+    branch_p1 = backend.get_double_value(grid2op.DoubleValueType.BRANCH_P1)
+    branch_p2 = backend.get_double_value(grid2op.DoubleValueType.BRANCH_P2)
+    branch_q1 = backend.get_double_value(grid2op.DoubleValueType.BRANCH_Q1)
+    branch_q2 = backend.get_double_value(grid2op.DoubleValueType.BRANCH_Q2)
+    
+    print("Branch flows:")
+    print(f"  P1: {branch_p1} MW")
+    print(f"  P2: {branch_p2} MW")
+    print(f"  Q1: {branch_q1} MVAr")
+    print(f"  Q2: {branch_q2} MVAr")
+    
+    # Get branch currents
+    branch_i1 = backend.get_double_value(grid2op.DoubleValueType.BRANCH_I1)
+    branch_i2 = backend.get_double_value(grid2op.DoubleValueType.BRANCH_I2)
+    print(f"\nBranch currents:")
+    print(f"  I1: {branch_i1} A")
+    print(f"  I2: {branch_i2} A")
+```
+</CodeGroup>
+
+## Modifying Network State
+
+### Updating Load Values
+
+```python
+import pypowsybl as pp
+from pypowsybl import grid2op
+import numpy as np
+
+network = pp.network.create_eurostag_tutorial_example1_network()
+pp.loadflow.run_ac(network)
+
+with grid2op.Backend(network) as backend:
+    # Check initial load
+    initial_p = backend.get_double_value(grid2op.DoubleValueType.LOAD_P)
+    print(f"Initial load P: {initial_p} MW")
+    
+    # Update load active power
+    backend.update_double_value(
+        grid2op.UpdateDoubleValueType.UPDATE_LOAD_P,
+        np.array([630.0]),  # New value
+        np.array([True])     # Apply this change
+    )
+    
+    # Verify update
+    updated_p = backend.get_double_value(grid2op.DoubleValueType.LOAD_P)
+    print(f"Updated load P: {updated_p} MW")
+    
+    # Run power flow with new load
+    backend.run_pf()
+    
+    # Check new branch flows
+    branch_p1 = backend.get_double_value(grid2op.DoubleValueType.BRANCH_P1)
+    print(f"\nNew branch flows: {branch_p1} MW")
+```
+
+### Topology Modifications
+
+```python
+import pypowsybl as pp
+from pypowsybl import grid2op
+import numpy as np
+
+network = pp.network.create_eurostag_tutorial_example1_network()
+pp.loadflow.run_ac(network)
+
+with grid2op.Backend(network) as backend:
+    # Get initial topology
+    initial_topo = backend.get_integer_value(grid2op.IntegerValueType.TOPO_VECT)
+    print(f"Initial topology: {initial_topo}")
+    
+    # Disconnect a load (set bus to -1)
+    backend.update_integer_value(
+        grid2op.UpdateIntegerValueType.UPDATE_LOAD_BUS,
+        np.array([-1]),
+        np.array([True])
+    )
+    
+    # Check updated topology
+    new_topo = backend.get_integer_value(grid2op.IntegerValueType.TOPO_VECT)
+    print(f"Updated topology: {new_topo}")
+    
+    # Disconnect generators
+    backend.update_integer_value(
+        grid2op.UpdateIntegerValueType.UPDATE_GENERATOR_BUS,
+        np.array([2, -1]),  # Bus 2 for first gen, disconnect second
+        np.array([True, True])
+    )
+    
+    # Verify changes
+    final_topo = backend.get_integer_value(grid2op.IntegerValueType.TOPO_VECT)
+    print(f"Final topology: {final_topo}")
+```
+
+## Working with IEEE 14-Bus Network
+
+```python
+import pypowsybl as pp
+from pypowsybl import grid2op
+import numpy as np
+
+# Create IEEE 14-bus network (includes shunt compensators)
+network = pp.network.create_ieee14()
+pp.loadflow.run_ac(network)
+
+with grid2op.Backend(network) as backend:
+    # Get shunt compensator data
+    shunt_names = backend.get_string_value(grid2op.StringValueType.SHUNT_NAME)
+    print(f"Shunts: {shunt_names}")
+    # Output: ['B9-SH']
+    
+    # Get shunt power and voltage
+    shunt_p = backend.get_double_value(grid2op.DoubleValueType.SHUNT_P)
+    shunt_q = backend.get_double_value(grid2op.DoubleValueType.SHUNT_Q)
+    shunt_v = backend.get_double_value(grid2op.DoubleValueType.SHUNT_V)
+    
+    print(f"\nShunt compensator:")
+    print(f"  P: {shunt_p} MW")
+    print(f"  Q: {shunt_q} MVAr")
+    print(f"  V: {shunt_v} kV")
+    
+    # Get all load voltages
+    load_voltages = backend.get_double_value(grid2op.DoubleValueType.LOAD_V)
+    print(f"\nLoad voltages: {load_voltages} kV")
+    
+    # Disconnect shunt and observe impact
+    backend.update_integer_value(
+        grid2op.UpdateIntegerValueType.UPDATE_SHUNT_BUS,
+        np.array([-1]),
+        np.array([True])
+    )
+    
+    # Run power flow
+    backend.run_pf()
+    
+    # Compare voltages
+    new_load_voltages = backend.get_double_value(grid2op.DoubleValueType.LOAD_V)
+    print(f"Load voltages after shunt disconnection: {new_load_voltages} kV")
+```
+
+## Running Power Flow
+
+### AC Power Flow
+
+```python
+import pypowsybl as pp
+from pypowsybl import grid2op
+
+network = pp.network.create_ieee14()
+pp.loadflow.run_ac(network)
+
+with grid2op.Backend(network) as backend:
+    # Run AC power flow
+    results = backend.run_pf(dc=False)
+    
+    print(f"Power flow converged: {results[0].status}")
+    print(f"Iteration count: {results[0].iteration_count}")
+    print(f"Slack bus active power: {results[0].slack_bus_active_power_mismatch} MW")
+```
+
+### DC Power Flow
+
+```python
+import pypowsybl as pp
+from pypowsybl import grid2op
+
+network = pp.network.create_ieee30()
+pp.loadflow.run_ac(network)
+
+with grid2op.Backend(network) as backend:
+    # Run DC power flow (faster, linear approximation)
+    results = backend.run_pf(dc=True)
+    
+    print(f"DC power flow status: {results[0].status}")
+```
+
+### Power Flow with Custom Parameters
+
+```python
+import pypowsybl as pp
+from pypowsybl import grid2op
+from pypowsybl.loadflow import Parameters
+
+network = pp.network.create_ieee14()
+pp.loadflow.run_ac(network)
+
+with grid2op.Backend(network) as backend:
+    # Create custom parameters
+    params = Parameters(
+        voltage_init_mode='DC_VALUES',
+        transformer_voltage_control_on=True,
+        no_generator_reactive_limits=False,
+        distributed_slack=True
+    )
+    
+    # Run with custom parameters
+    results = backend.run_pf(dc=False, parameters=params)
+    print(f"Custom power flow: {results[0].status}")
+```
+
+## Backend Persistence and Serialization
+
+```python
+import pypowsybl as pp
+from pypowsybl import grid2op
+import pickle
+import tempfile
+import pathlib
+
+network = pp.network.create_eurostag_tutorial_example1_network()
+pp.loadflow.run_ac(network)
+
+with grid2op.Backend(network) as backend:
+    # Modify network state
+    backend.update_double_value(
+        grid2op.UpdateDoubleValueType.UPDATE_LOAD_P,
+        np.array([630.0]),
+        np.array([True])
+    )
+    pp.loadflow.run_ac(network)
+    
+    # Save backend to file
+    with tempfile.TemporaryDirectory() as tmpdir:
+        data_file = pathlib.Path(tmpdir) / 'backend.pkl'
+        
+        with open(data_file, 'wb') as f:
+            pickle.dump(backend, f)
+        
+        # Load backend from file
+        with open(data_file, 'rb') as f:
+            with pickle.load(f) as restored_backend:
+                # Verify state was preserved
+                load_p = restored_backend.get_double_value(grid2op.DoubleValueType.LOAD_P)
+                print(f"Restored load P: {load_p} MW")
+```
+
+<Tip>
+  Backend serialization is useful for checkpointing RL training or saving simulation states.
+</Tip>
+
+## Branch Limits and Constraints
+
+```python
+import pypowsybl as pp
+from pypowsybl import grid2op
+
+network = pp.network.create_eurostag_tutorial_example1_network()
+pp.loadflow.run_ac(network)
+
+with grid2op.Backend(network) as backend:
+    # Get branch permanent limits
+    limits = backend.get_double_value(grid2op.DoubleValueType.BRANCH_PERMANENT_LIMIT_A)
+    print(f"Branch limits (A): {limits}")
+    
+    # Get branch currents
+    currents_1 = backend.get_double_value(grid2op.DoubleValueType.BRANCH_I1)
+    currents_2 = backend.get_double_value(grid2op.DoubleValueType.BRANCH_I2)
+    
+    # Check for overloads
+    for i, (limit, i1, i2) in enumerate(zip(limits, currents_1, currents_2)):
+        max_current = max(i1, i2)
+        if max_current > limit:
+            branch_names = backend.get_string_value(grid2op.StringValueType.BRANCH_NAME)
+            print(f"\nOverload on branch {branch_names[i]}:")
+            print(f"  Current: {max_current:.2f} A")
+            print(f"  Limit: {limit:.2f} A")
+            print(f"  Overload: {(max_current/limit - 1)*100:.1f}%")
+```
+
+## Checking for Isolated Components
+
+```python
+import pypowsybl as pp
+from pypowsybl import grid2op
+import numpy as np
+
+network = pp.network.create_ieee14()
+pp.loadflow.run_ac(network)
+
+# Create backend that checks for isolated injections
+with grid2op.Backend(
+    network,
+    check_isolated_and_disconnected_injections=False
+) as backend:
+    # Disconnect a branch
+    backend.update_integer_value(
+        grid2op.UpdateIntegerValueType.UPDATE_BRANCH_BUS1,
+        np.array([1] * 10 + [-1] + [1] * 9),
+        np.array([False] * 10 + [True] + [False] * 9)
+    )
+    backend.update_integer_value(
+        grid2op.UpdateIntegerValueType.UPDATE_BRANCH_BUS2,
+        np.array([1] * 10 + [-1] + [1] * 9),
+        np.array([False] * 10 + [True] + [False] * 9)
+    )
+    
+    # Run power flow
+    backend.run_pf()
+    
+    # Check topology
+    topo = backend.get_integer_value(grid2op.IntegerValueType.TOPO_VECT)
+    print(f"Topology after disconnection: {topo}")
+    print(f"Isolated components: {np.sum(topo == -1)}")
+```
+
+## Complete RL Training Example
+
+```python
+import pypowsybl as pp
+from pypowsybl import grid2op
+import numpy as np
+
+def simulate_episode(network, num_steps=10):
+    """
+    Simulate a simple episode for reinforcement learning.
+    """
+    pp.loadflow.run_ac(network)
+    
+    with grid2op.Backend(network) as backend:
+        episode_data = []
+        
+        for step in range(num_steps):
+            # Get current state
+            load_p = backend.get_double_value(grid2op.DoubleValueType.LOAD_P)
+            gen_p = backend.get_double_value(grid2op.DoubleValueType.GENERATOR_P)
+            branch_i = backend.get_double_value(grid2op.DoubleValueType.BRANCH_I1)
+            
+            # Random load variation (simulating demand changes)
+            load_variation = 1.0 + np.random.uniform(-0.1, 0.1, size=load_p.shape)
+            new_load = load_p * load_variation
+            
+            # Update load
+            backend.update_double_value(
+                grid2op.UpdateDoubleValueType.UPDATE_LOAD_P,
+                new_load,
+                np.ones(len(new_load), dtype=bool)
+            )
+            
+            # Run power flow
+            results = backend.run_pf()
+            
+            # Record step data
+            episode_data.append({
+                'step': step,
+                'converged': results[0].status.name == 'CONVERGED',
+                'total_load': new_load.sum(),
+                'total_generation': gen_p.sum(),
+                'max_line_current': branch_i.max()
+            })
+        
+        return episode_data
+
+# Run simulation
+network = pp.network.create_ieee14()
+episode = simulate_episode(network, num_steps=5)
+
+print("\nEpisode results:")
+for data in episode:
+    print(f"Step {data['step']}: Load={data['total_load']:.1f} MW, "
+          f"Converged={data['converged']}")
+```
+
+<Note>
+  This example demonstrates the basic structure for RL training. In practice, you would integrate this with Grid2Op's full environment and action/observation spaces.
+</Note>
+
+## Next Steps
+
+- Explore [IEEE Networks](/examples/ieee-networks) for test scenarios
+- Learn about [Network Modification](/examples/network-modification) for dynamic environments
+- Check Grid2Op documentation for full RL integration patterns

@@ -1,0 +1,131 @@
+---
+title: "Introduction"
+description: "Python SDK for power system modeling, simulation, and analysis based on PowSyBl and GraalVM"
+---
+
+# Welcome to PyPowSyBl
+
+PyPowSyBl is a Python library that provides access to the [PowSyBl](https://www.powsybl.org/) Java framework for power system analysis. Built on GraalVM native image technology, it delivers high-performance power grid modeling and simulation capabilities directly to Python developers.
+
+<CardGroup cols={2}>
+  <Card title="Quick Start" icon="rocket" href="/quickstart">
+    Get up and running with PyPowSyBl in minutes
+  </Card>
+  <Card title="Installation" icon="download" href="/installation">
+    Install PyPowSyBl for your platform
+  </Card>
+  <Card title="User Guide" icon="book" href="/user-guide/network">
+    Learn core concepts and workflows
+  </Card>
+  <Card title="API Reference" icon="code" href="/api-reference/network">
+    Explore the complete API documentation
+  </Card>
+</CardGroup>
+
+## Key Features
+
+PyPowSyBl provides comprehensive power system analysis capabilities:
+
+<CardGroup cols={2}>
+  <Card title="Network Modeling" icon="diagram-project">
+    Create and manipulate power network models with substations, generators, lines, transformers, and more
+  </Card>
+  <Card title="Load Flow Analysis" icon="bolt">
+    Run AC and DC load flow calculations using OpenLoadFlow or DynaFlow
+  </Card>
+  <Card title="Security Analysis" icon="shield-halved">
+    Simulate contingencies and analyze system security with N-1 analysis
+  </Card>
+  <Card title="Sensitivity Analysis" icon="chart-line">
+    Calculate sensitivity factors for power system optimization
+  </Card>
+  <Card title="Short-Circuit Analysis" icon="circle-exclamation">
+    Compute short-circuit currents for fault analysis
+  </Card>
+  <Card title="Dynamic Simulation" icon="wave-square">
+    Perform time-domain dynamic simulations with Dynawo
+  </Card>
+  <Card title="Multiple Formats" icon="file-import">
+    Import and export networks in CGMES, XIIDM, PSS/E, MATPOWER, and more
+  </Card>
+  <Card title="Visualization" icon="diagram-successor">
+    Generate network diagrams with single-line and network area diagrams
+  </Card>
+</CardGroup>
+
+## Use Cases
+
+PyPowSyBl is designed for power system engineers, researchers, and data scientists working on:
+
+- **Grid Operations**: Load flow analysis, contingency analysis, and operational planning
+- **System Planning**: Network expansion studies and capacity analysis
+- **Research**: Power system modeling, algorithm development, and academic research
+- **Machine Learning**: Grid2Op integration for reinforcement learning applications
+- **Standards Compliance**: CGMES and CIM standard support for European grid operators
+
+## What Makes PyPowSyBl Unique
+
+<AccordionGroup>
+  <Accordion title="High Performance">
+    Built on GraalVM native image technology, PyPowSyBl compiles Java code to native libraries for fast execution without JVM overhead.
+  </Accordion>
+  <Accordion title="Production Ready">
+    Based on the mature PowSyBl framework used by European transmission system operators like RTE (France) and Elia (Belgium).
+  </Accordion>
+  <Accordion title="Comprehensive">
+    Covers the full power system analysis workflow from network creation to advanced simulations.
+  </Accordion>
+  <Accordion title="Python Native">
+    Full Python integration with pandas DataFrames, type hints, and Pythonic APIs.
+  </Accordion>
+  <Accordion title="Open Standards">
+    First-class support for CGMES, CIM, and other international power system data standards.
+  </Accordion>
+</AccordionGroup>
+
+## Simple Example
+
+Get started with a basic load flow calculation:
+
+```python
+import pypowsybl as pp
+
+# Create an IEEE 14-bus test network
+network = pp.network.create_ieee14()
+
+# Run an AC load flow
+results = pp.loadflow.run_ac(network)
+print(results)
+
+# Get bus voltages as a pandas DataFrame
+buses = network.get_buses()
+print(buses[['v_mag', 'v_angle']])
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Installation Guide" icon="download" href="/installation">
+    Install PyPowSyBl on Linux, macOS, or Windows
+  </Card>
+  <Card title="Quickstart Tutorial" icon="play" href="/quickstart">
+    Run your first load flow calculation
+  </Card>
+  <Card title="Network Guide" icon="diagram-project" href="/user-guide/network">
+    Learn how to create and manipulate networks
+  </Card>
+  <Card title="Examples" icon="lightbulb" href="/examples/ieee-networks">
+    Explore practical examples and use cases
+  </Card>
+</CardGroup>
+
+## Community and Support
+
+- **GitHub**: [powsybl/pypowsybl](https://github.com/powsybl/pypowsybl) - Source code, issues, and discussions
+- **Slack**: [PowSyBl Workspace](https://join.slack.com/t/powsybl/shared_invite/zt-36jvd725u-cnquPgZb6kpjH8SKh~FWHQ) - Community chat and support
+- **Documentation**: [PowSyBl Core Docs](https://www.powsybl.org/pages/documentation/) - Java framework documentation
+- **Notebooks**: [pypowsybl-notebooks](https://github.com/powsybl/pypowsybl-notebooks) - Jupyter notebook examples
+
+<Note>
+PyPowSyBl requires Python 3.9 or later and is available for Linux, macOS, and Windows on both amd64 and arm64 architectures.
+</Note>

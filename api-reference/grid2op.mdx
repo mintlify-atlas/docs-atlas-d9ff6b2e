@@ -1,0 +1,383 @@
+---
+title: 'Grid2Op Integration'
+description: 'Backend implementation for Grid2Op integration with PyPowSyBl'
+---
+
+## Overview
+
+The Grid2Op integration provides a backend implementation that allows Grid2Op environments to use PyPowSyBl as their power flow solver. This enables Grid2Op agents to leverage the robust simulation capabilities of PowSyBl for training and evaluation.
+
+## Backend
+
+### Backend Class
+
+The main class for Grid2Op integration.
+
+```python
+from pypowsybl.grid2op import Backend
+from pypowsybl.network import Network
+
+# Create a backend from an existing network
+network = Network.load("path/to/network.xiidm")
+backend = Backend(network)
+```
+
+<ParamField path="network" type="Network" required>
+  The PyPowSyBl network to use for the backend
+</ParamField>
+
+<ParamField path="consider_open_branch_reactive_flow" type="bool" default="False">
+  Whether to consider reactive flow in open branches
+</ParamField>
+
+<ParamField path="check_isolated_and_disconnected_injections" type="bool" default="True">
+  Whether to check for isolated and disconnected injections during validation
+</ParamField>
+
+<ParamField path="buses_per_voltage_level" type="int" default="2">
+  Number of buses per voltage level in the bus-breaker topology
+</ParamField>
+
+<ParamField path="connect_all_elements_to_first_bus" type="bool" default="True">
+  Whether to connect all elements to the first bus initially
+</ParamField>
+
+### Methods
+
+#### network
+
+Get the underlying PyPowSyBl network.
+
+```python
+network = backend.network
+```
+
+<ResponseField name="network" type="Network">
+  The PyPowSyBl network object
+</ResponseField>
+
+#### get_string_value
+
+Retrieve string values from the backend (e.g., element names).
+
+```python
+from pypowsybl.grid2op import StringValueType
+
+load_names = backend.get_string_value(StringValueType.LOAD_NAME)
+generator_names = backend.get_string_value(StringValueType.GENERATOR_NAME)
+```
+
+<ParamField path="value_type" type="StringValueType" required>
+  The type of string value to retrieve
+</ParamField>
+
+<ResponseField name="values" type="numpy.ndarray">
+  Array of string values
+</ResponseField>
+
+#### get_integer_value
+
+Retrieve integer values from the backend (e.g., bus numbers, topology vector).
+
+```python
+from pypowsybl.grid2op import IntegerValueType
+
+topo_vect = backend.get_integer_value(IntegerValueType.TOPO_VECT)
+load_buses = backend.get_integer_value(IntegerValueType.LOAD_VOLTAGE_LEVEL_NUM)
+```
+
+<ParamField path="value_type" type="IntegerValueType" required>
+  The type of integer value to retrieve
+</ParamField>
+
+<ResponseField name="values" type="numpy.ndarray">
+  Array of integer values
+</ResponseField>
+
+#### get_double_value
+
+Retrieve double/float values from the backend (e.g., power flows, voltages).
+
+```python
+from pypowsybl.grid2op import DoubleValueType
+
+load_p = backend.get_double_value(DoubleValueType.LOAD_P)
+load_q = backend.get_double_value(DoubleValueType.LOAD_Q)
+gen_v = backend.get_double_value(DoubleValueType.GENERATOR_V)
+```
+
+<ParamField path="value_type" type="DoubleValueType" required>
+  The type of double value to retrieve
+</ParamField>
+
+<ResponseField name="values" type="numpy.ndarray">
+  Array of float values
+</ResponseField>
+
+#### update_double_value
+
+Update double/float values in the backend (e.g., injection setpoints).
+
+```python
+from pypowsybl.grid2op import UpdateDoubleValueType
+import numpy as np
+
+# Update load active power
+values = np.array([100.0, 150.0, 200.0])
+changed = np.array([1, 1, 0])  # Flags indicating which values changed
+backend.update_double_value(UpdateDoubleValueType.UPDATE_LOAD_P, values, changed)
+```
+
+<ParamField path="value_type" type="UpdateDoubleValueType" required>
+  The type of value to update
+</ParamField>
+
+<ParamField path="value" type="numpy.ndarray" required>
+  Array of new values
+</ParamField>
+
+<ParamField path="changed" type="numpy.ndarray" required>
+  Binary array indicating which elements have changed (1 for changed, 0 for unchanged)
+</ParamField>
+
+#### update_integer_value
+
+Update integer values in the backend (e.g., bus connections).
+
+```python
+from pypowsybl.grid2op import UpdateIntegerValueType
+import numpy as np
+
+# Update generator bus connections
+bus_ids = np.array([1, 2, 1])
+changed = np.array([1, 1, 0])
+backend.update_integer_value(UpdateIntegerValueType.UPDATE_GENERATOR_BUS, bus_ids, changed)
+```
+
+<ParamField path="value_type" type="UpdateIntegerValueType" required>
+  The type of value to update
+</ParamField>
+
+<ParamField path="value" type="numpy.ndarray" required>
+  Array of new values
+</ParamField>
+
+<ParamField path="changed" type="numpy.ndarray" required>
+  Binary array indicating which elements have changed (1 for changed, 0 for unchanged)
+</ParamField>
+
+#### check_isolated_and_disconnected_injections
+
+Check if there are any isolated or disconnected injections in the network.
+
+```python
+is_valid = backend.check_isolated_and_disconnected_injections()
+```
+
+<ResponseField name="is_valid" type="bool">
+  True if the network has no isolated or disconnected injections, False otherwise
+</ResponseField>
+
+#### run_pf
+
+Run a power flow calculation on the network.
+
+```python
+from pypowsybl.loadflow import Parameters
+
+# Run AC power flow
+results = backend.run_pf(dc=False)
+
+# Run DC power flow
+results = backend.run_pf(dc=True)
+
+# Run with custom parameters
+params = Parameters()
+results = backend.run_pf(dc=False, parameters=params)
+```
+
+<ParamField path="dc" type="bool" default="False">
+  Whether to run DC power flow (True) or AC power flow (False)
+</ParamField>
+
+<ParamField path="parameters" type="Parameters" optional>
+  Optional load flow parameters to customize the calculation
+</ParamField>
+
+<ResponseField name="results" type="List[ComponentResult]">
+  List of component results, one per connected component in the network
+</ResponseField>
+
+#### close
+
+Close the backend and free associated resources.
+
+```python
+backend.close()
+```
+
+### Context Manager Support
+
+The Backend supports Python's context manager protocol for automatic resource management:
+
+```python
+from pypowsybl.grid2op import Backend
+from pypowsybl.network import Network
+
+network = Network.load("path/to/network.xiidm")
+
+with Backend(network) as backend:
+    # Use the backend
+    results = backend.run_pf()
+    # Backend is automatically closed when exiting the context
+```
+
+## Enumerations
+
+### StringValueType
+
+Enumeration of string value types that can be retrieved from the backend.
+
+| Value | Description |
+|-------|-------------|
+| `VOLTAGE_LEVEL_NAME` | Names of voltage levels |
+| `LOAD_NAME` | Names of loads |
+| `GENERATOR_NAME` | Names of generators |
+| `SHUNT_NAME` | Names of shunt compensators |
+| `BRANCH_NAME` | Names of branches (lines and transformers) |
+
+### IntegerValueType
+
+Enumeration of integer value types that can be retrieved from the backend.
+
+| Value | Description |
+|-------|-------------|
+| `LOAD_VOLTAGE_LEVEL_NUM` | Voltage level numbers for loads |
+| `GENERATOR_VOLTAGE_LEVEL_NUM` | Voltage level numbers for generators |
+| `SHUNT_VOLTAGE_LEVEL_NUM` | Voltage level numbers for shunts |
+| `BRANCH_VOLTAGE_LEVEL_NUM_1` | Voltage level numbers for branch side 1 |
+| `BRANCH_VOLTAGE_LEVEL_NUM_2` | Voltage level numbers for branch side 2 |
+| `SHUNT_LOCAL_BUS` | Local bus numbers for shunts |
+| `TOPO_VECT` | Topology vector (bus connections for all elements) |
+
+### DoubleValueType
+
+Enumeration of double value types that can be retrieved from the backend.
+
+| Value | Description |
+|-------|-------------|
+| `LOAD_P` | Load active power (MW) |
+| `LOAD_Q` | Load reactive power (MVar) |
+| `LOAD_V` | Load voltage magnitude (kV) |
+| `LOAD_ANGLE` | Load voltage angle (degrees) |
+| `GENERATOR_P` | Generator active power (MW) |
+| `GENERATOR_Q` | Generator reactive power (MVar) |
+| `GENERATOR_V` | Generator voltage magnitude (kV) |
+| `GENERATOR_ANGLE` | Generator voltage angle (degrees) |
+| `SHUNT_P` | Shunt active power (MW) |
+| `SHUNT_Q` | Shunt reactive power (MVar) |
+| `SHUNT_V` | Shunt voltage magnitude (kV) |
+| `SHUNT_ANGLE` | Shunt voltage angle (degrees) |
+| `BRANCH_P1` | Branch active power at side 1 (MW) |
+| `BRANCH_P2` | Branch active power at side 2 (MW) |
+| `BRANCH_Q1` | Branch reactive power at side 1 (MVar) |
+| `BRANCH_Q2` | Branch reactive power at side 2 (MVar) |
+| `BRANCH_V1` | Branch voltage magnitude at side 1 (kV) |
+| `BRANCH_V2` | Branch voltage magnitude at side 2 (kV) |
+| `BRANCH_ANGLE1` | Branch voltage angle at side 1 (degrees) |
+| `BRANCH_ANGLE2` | Branch voltage angle at side 2 (degrees) |
+| `BRANCH_I1` | Branch current at side 1 (A) |
+| `BRANCH_I2` | Branch current at side 2 (A) |
+| `BRANCH_PERMANENT_LIMIT_A` | Branch permanent current limit (A) |
+
+### UpdateDoubleValueType
+
+Enumeration of double value types that can be updated in the backend.
+
+| Value | Description |
+|-------|-------------|
+| `UPDATE_LOAD_P` | Update load active power setpoint |
+| `UPDATE_LOAD_Q` | Update load reactive power setpoint |
+| `UPDATE_GENERATOR_P` | Update generator active power setpoint |
+| `UPDATE_GENERATOR_V` | Update generator voltage setpoint |
+
+### UpdateIntegerValueType
+
+Enumeration of integer value types that can be updated in the backend.
+
+| Value | Description |
+|-------|-------------|
+| `UPDATE_LOAD_BUS` | Update load bus connection |
+| `UPDATE_GENERATOR_BUS` | Update generator bus connection |
+| `UPDATE_SHUNT_BUS` | Update shunt bus connection |
+| `UPDATE_BRANCH_BUS1` | Update branch side 1 bus connection |
+| `UPDATE_BRANCH_BUS2` | Update branch side 2 bus connection |
+
+## Example Usage
+
+### Complete Grid2Op Integration
+
+```python
+from pypowsybl.network import Network
+from pypowsybl.grid2op import Backend, DoubleValueType, UpdateDoubleValueType
+import numpy as np
+
+# Load a network
+network = Network.load("ieee14.xiidm")
+
+# Create Grid2Op backend
+with Backend(network, buses_per_voltage_level=2) as backend:
+    # Get current state
+    load_p = backend.get_double_value(DoubleValueType.LOAD_P)
+    gen_p = backend.get_double_value(DoubleValueType.GENERATOR_P)
+    
+    print(f"Initial loads: {load_p}")
+    print(f"Initial generation: {gen_p}")
+    
+    # Modify loads
+    new_loads = load_p * 1.1  # Increase by 10%
+    changed = np.ones(len(new_loads), dtype=int)
+    backend.update_double_value(UpdateDoubleValueType.UPDATE_LOAD_P, new_loads, changed)
+    
+    # Run power flow
+    results = backend.run_pf(dc=False)
+    
+    for result in results:
+        print(f"Component {result.connected_component_num}: {result.status}")
+        print(f"Iterations: {result.iteration_count}")
+    
+    # Get updated state
+    branch_p1 = backend.get_double_value(DoubleValueType.BRANCH_P1)
+    print(f"Branch flows: {branch_p1}")
+```
+
+### Topology Manipulation
+
+```python
+from pypowsybl.grid2op import (
+    Backend, IntegerValueType, UpdateIntegerValueType
+)
+import numpy as np
+
+with Backend(network) as backend:
+    # Get current topology
+    topo_vect = backend.get_integer_value(IntegerValueType.TOPO_VECT)
+    print(f"Current topology: {topo_vect}")
+    
+    # Switch generator to different bus
+    gen_buses = np.array([2, 1, 1])  # Move first generator to bus 2
+    changed = np.array([1, 0, 0])  # Only first generator changed
+    backend.update_integer_value(
+        UpdateIntegerValueType.UPDATE_GENERATOR_BUS, 
+        gen_buses, 
+        changed
+    )
+    
+    # Validate the topology
+    is_valid = backend.check_isolated_and_disconnected_injections()
+    if is_valid:
+        print("Topology is valid")
+        results = backend.run_pf()
+    else:
+        print("Invalid topology: isolated or disconnected injections")
+```

@@ -1,0 +1,508 @@
+---
+title: Logging Configuration
+description: Configure PyPowSyBl logging to debug issues and monitor operations
+---
+
+PyPowSyBl uses Python's standard logging framework to provide detailed information about operations, errors, and debugging information.
+
+## Overview
+
+All PyPowSyBl logs are sent to the `'powsybl'` logger. By default, this logger has a null handler, so no logs are printed unless you configure logging.
+
+## Basic Logging Setup
+
+Enable logging to see PyPowSyBl output:
+
+```python
+import logging
+
+# Create basic logging configuration
+logging.basicConfig()
+
+# Set log level for PyPowSyBl
+logging.getLogger('powsybl').setLevel(logging.INFO)
+
+import pypowsybl as pp
+# Now you'll see INFO level messages
+```
+
+## Log Levels
+
+PyPowSyBl supports standard Python logging levels:
+
+<Accordion title="DEBUG">
+  Most detailed logging. Shows:
+  - Memory configuration
+  - Detailed operation steps
+  - Internal state changes
+  
+  ```python
+  logging.getLogger('powsybl').setLevel(logging.DEBUG)
+  ```
+  
+  Use for: Development and troubleshooting
+</Accordion>
+
+<Accordion title="INFO">
+  General informational messages:
+  - Operation start/completion
+  - Major steps in calculations
+  - Configuration values
+  
+  ```python
+  logging.getLogger('powsybl').setLevel(logging.INFO)
+  ```
+  
+  Use for: Normal operation monitoring
+</Accordion>
+
+<Accordion title="WARNING">
+  Warnings about potential issues:
+  - Deprecated features
+  - Unusual conditions
+  - Non-critical problems
+  
+  ```python
+  logging.getLogger('powsybl').setLevel(logging.WARNING)
+  ```
+  
+  Use for: Production (default recommendation)
+</Accordion>
+
+<Accordion title="ERROR">
+  Error messages:
+  - Operation failures
+  - Invalid configurations
+  - Critical issues
+  
+  ```python
+  logging.getLogger('powsybl').setLevel(logging.ERROR)
+  ```
+  
+  Use for: Minimal logging
+</Accordion>
+
+## Java TRACE Logging
+
+For extremely detailed Java-side logging (logback TRACE level), use level 1:
+
+```python
+import logging
+
+logging.basicConfig()
+logging.getLogger('powsybl').setLevel(1)
+
+import pypowsybl as pp
+# Shows detailed Java-side execution
+```
+
+<Warning>
+  TRACE logging (level 1) produces very verbose output. Use only for deep debugging.
+</Warning>
+
+## Custom Log Format
+
+Create more readable log output:
+
+```python
+import logging
+
+# Configure format with timestamp
+logging.basicConfig(
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    level=logging.INFO
+)
+
+logging.getLogger('powsybl').setLevel(logging.INFO)
+
+import pypowsybl as pp
+# Output: 2026-03-06 10:30:45,123 - INFO - Max heap is 4096 MB
+```
+
+### Format Options
+
+```python
+# Detailed format
+logging.basicConfig(
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
+)
+
+# Simple format
+logging.basicConfig(
+    format='[%(levelname)s] %(message)s'
+)
+
+# With module information
+logging.basicConfig(
+    format='%(asctime)s - %(name)s - %(module)s - %(levelname)s - %(message)s'
+)
+```
+
+## Logging to File
+
+Save logs to a file instead of console:
+
+```python
+import logging
+
+logging.basicConfig(
+    filename='pypowsybl.log',
+    filemode='w',  # 'w' to overwrite, 'a' to append
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    level=logging.INFO
+)
+
+logging.getLogger('powsybl').setLevel(logging.DEBUG)
+
+import pypowsybl as pp
+# Logs written to pypowsybl.log
+```
+
+## Multiple Handlers
+
+Log to both console and file:
+
+```python
+import logging
+import sys
+
+# Create logger
+logger = logging.getLogger('powsybl')
+logger.setLevel(logging.DEBUG)
+
+# Console handler (INFO level)
+console_handler = logging.StreamHandler(sys.stdout)
+console_handler.setLevel(logging.INFO)
+console_format = logging.Formatter('[%(levelname)s] %(message)s')
+console_handler.setFormatter(console_format)
+
+# File handler (DEBUG level)
+file_handler = logging.FileHandler('pypowsybl_debug.log')
+file_handler.setLevel(logging.DEBUG)
+file_format = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+file_handler.setFormatter(file_format)
+
+# Add handlers
+logger.addHandler(console_handler)
+logger.addHandler(file_handler)
+
+import pypowsybl as pp
+# INFO+ to console, DEBUG+ to file
+```
+
+## Environment-Specific Configuration
+
+### Development
+
+```python
+import logging
+
+logging.basicConfig(
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    level=logging.DEBUG
+)
+
+logging.getLogger('powsybl').setLevel(logging.DEBUG)
+```
+
+### Production
+
+```python
+import logging
+
+logging.basicConfig(
+    filename='/var/log/pypowsybl/app.log',
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    level=logging.WARNING
+)
+
+logging.getLogger('powsybl').setLevel(logging.WARNING)
+```
+
+### Testing
+
+```python
+import logging
+
+logging.basicConfig(
+    format='[%(levelname)s] %(message)s',
+    level=logging.ERROR
+)
+
+logging.getLogger('powsybl').setLevel(logging.ERROR)
+# Suppress most output during tests
+```
+
+## Jupyter Notebook Configuration
+
+For Jupyter notebooks:
+
+```python
+import logging
+import sys
+
+# Configure logging for notebook
+logging.basicConfig(
+    stream=sys.stdout,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    level=logging.INFO
+)
+
+logging.getLogger('powsybl').setLevel(logging.INFO)
+
+import pypowsybl as pp
+```
+
+## Filtering Specific Loggers
+
+Control logging for specific modules:
+
+```python
+import logging
+
+logging.basicConfig(level=logging.INFO)
+
+# General pypowsybl logs at INFO
+logging.getLogger('powsybl').setLevel(logging.INFO)
+
+# Loadflow logs at DEBUG
+logging.getLogger('powsybl.loadflow').setLevel(logging.DEBUG)
+
+# Security analysis logs at WARNING only
+logging.getLogger('powsybl.security').setLevel(logging.WARNING)
+```
+
+## Temporary Log Level Changes
+
+Change log level temporarily:
+
+```python
+import logging
+
+logger = logging.getLogger('powsybl')
+original_level = logger.level
+
+try:
+    # Temporarily enable debug
+    logger.setLevel(logging.DEBUG)
+    # ... operations that need detailed logging ...
+    network = pp.network.load('problematic_network.xiidm')
+finally:
+    # Restore original level
+    logger.setLevel(original_level)
+```
+
+## Complete Configuration Example
+
+```python
+import logging
+import logging.handlers
+import sys
+from pathlib import Path
+
+# Create logs directory
+log_dir = Path('logs')
+log_dir.mkdir(exist_ok=True)
+
+# Create logger
+logger = logging.getLogger('powsybl')
+logger.setLevel(logging.DEBUG)
+
+# Console handler - INFO and above
+console = logging.StreamHandler(sys.stdout)
+console.setLevel(logging.INFO)
+console_format = logging.Formatter(
+    '[%(levelname)-8s] %(message)s'
+)
+console.setFormatter(console_format)
+
+# File handler - DEBUG and above, rotates at 10MB
+file_handler = logging.handlers.RotatingFileHandler(
+    log_dir / 'pypowsybl.log',
+    maxBytes=10*1024*1024,  # 10 MB
+    backupCount=5
+)
+file_handler.setLevel(logging.DEBUG)
+file_format = logging.Formatter(
+    '%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
+)
+file_handler.setFormatter(file_format)
+
+# Error file handler - ERROR and above only
+error_handler = logging.FileHandler(log_dir / 'errors.log')
+error_handler.setLevel(logging.ERROR)
+error_handler.setFormatter(file_format)
+
+# Add all handlers
+logger.addHandler(console)
+logger.addHandler(file_handler)
+logger.addHandler(error_handler)
+
+import pypowsybl as pp
+logger.info("PyPowSyBl logging configured")
+```
+
+## Common Logging Scenarios
+
+<Accordion title="Debugging network loading issues">
+  ```python
+  import logging
+  
+  logging.basicConfig(
+      format='%(asctime)s - %(levelname)s - %(message)s'
+  )
+  logging.getLogger('powsybl').setLevel(logging.DEBUG)
+  
+  import pypowsybl as pp
+  
+  # Debug output will show import details
+  network = pp.network.load('problematic_file.xiidm')
+  ```
+</Accordion>
+
+<Accordion title="Monitoring long-running calculations">
+  ```python
+  import logging
+  
+  logging.basicConfig(
+      format='%(asctime)s - %(message)s',
+      level=logging.INFO
+  )
+  logging.getLogger('powsybl').setLevel(logging.INFO)
+  
+  import pypowsybl as pp
+  
+  # Will show progress of calculation
+  result = pp.security.run_ac(large_network)
+  ```
+</Accordion>
+
+<Accordion title="Production error tracking">
+  ```python
+  import logging
+  import logging.handlers
+  
+  logger = logging.getLogger('powsybl')
+  logger.setLevel(logging.WARNING)
+  
+  handler = logging.handlers.RotatingFileHandler(
+      '/var/log/pypowsybl/errors.log',
+      maxBytes=50*1024*1024,
+      backupCount=10
+  )
+  handler.setFormatter(
+      logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+  )
+  logger.addHandler(handler)
+  
+  import pypowsybl as pp
+  # Only warnings and errors logged
+  ```
+</Accordion>
+
+## Verifying Configuration
+
+Check your logging setup:
+
+```python
+import logging
+
+logger = logging.getLogger('powsybl')
+
+print(f"Logger level: {logging.getLevelName(logger.level)}")
+print(f"Effective level: {logging.getLevelName(logger.getEffectiveLevel())}")
+print(f"Handlers: {logger.handlers}")
+print(f"Propagate: {logger.propagate}")
+
+# Test log output
+logger.debug("Debug message")
+logger.info("Info message")
+logger.warning("Warning message")
+logger.error("Error message")
+```
+
+## Troubleshooting
+
+<Accordion title="No logs appearing">
+  Check:
+  1. Logging configured **before** importing pypowsybl
+  2. Log level set appropriately
+  3. Handler added to logger
+  
+  ```python
+  import logging
+  logging.basicConfig()  # This must come first
+  logging.getLogger('powsybl').setLevel(logging.INFO)
+  import pypowsybl as pp  # Then import
+  ```
+</Accordion>
+
+<Accordion title="Too much output">
+  Increase log level:
+  ```python
+  logging.getLogger('powsybl').setLevel(logging.WARNING)
+  ```
+  
+  Or filter specific modules:
+  ```python
+  logging.getLogger('powsybl.network').setLevel(logging.ERROR)
+  ```
+</Accordion>
+
+<Accordion title="Missing detailed information">
+  Lower the log level:
+  ```python
+  logging.getLogger('powsybl').setLevel(logging.DEBUG)
+  ```
+  
+  For Java trace logs:
+  ```python
+  logging.getLogger('powsybl').setLevel(1)
+  ```
+</Accordion>
+
+## Best Practices
+
+<Steps>
+  <Step title="Configure early">
+    Set up logging before importing pypowsybl:
+    ```python
+    import logging
+    logging.basicConfig()
+    logging.getLogger('powsybl').setLevel(logging.INFO)
+    import pypowsybl as pp
+    ```
+  </Step>
+  
+  <Step title="Use appropriate levels">
+    - Development: DEBUG
+    - Production: WARNING
+    - Testing: ERROR
+  </Step>
+  
+  <Step title="Add context to format">
+    Include timestamps and module names:
+    ```python
+    logging.basicConfig(
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    )
+    ```
+  </Step>
+  
+  <Step title="Rotate log files">
+    Use RotatingFileHandler for long-running applications.
+  </Step>
+</Steps>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Network" icon="diagram-project" href="/user-guide/network">
+    Start working with networks
+  </Card>
+  <Card title="Load Flow" icon="bolt" href="/user-guide/loadflow">
+    Run your first load flow
+  </Card>
+</CardGroup>

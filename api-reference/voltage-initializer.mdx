@@ -1,0 +1,483 @@
+---
+title: 'Voltage Initializer'
+description: 'API reference for voltage initializer module'
+---
+
+## Overview
+
+The voltage initializer module provides an AC Optimal Power Flow (ACOPF) solution to initialize voltage magnitudes and phase angles in a power network. It's useful for obtaining a feasible starting point for power flow calculations when the initial network state is not well-defined.
+
+## Main Functions
+
+### run
+
+Run voltage initializer on a network.
+
+```python
+from pypowsybl.voltage_initializer import run, VoltageInitializerParameters
+
+params = VoltageInitializerParameters()
+result = run(network=network, params=params, debug=False)
+```
+
+<ParamField path="network" type="Network">
+  Network on which voltage initializer will run
+</ParamField>
+
+<ParamField path="params" type="VoltageInitializerParameters">
+  Parameters to customize the run
+</ParamField>
+
+<ParamField path="debug" type="bool">
+  If True, the temporary directory of the voltage initializer run will not be erased (default: False)
+</ParamField>
+
+**Returns:** VoltageInitializerResults
+
+## Main Classes
+
+### VoltageInitializerParameters
+
+Parameters for voltage initializer execution.
+
+```python
+from pypowsybl.voltage_initializer import (
+    VoltageInitializerParameters,
+    VoltageInitializerObjective,
+    VoltageInitializerLogLevelAmpl,
+    VoltageInitializerLogLevelSolver,
+    VoltageInitializerReactiveSlackBusesMode
+)
+
+params = VoltageInitializerParameters()
+```
+
+#### Configuration Methods
+
+<ParamField path="add_variable_shunt_compensators" type="method">
+  Indicate that given shunt compensators have variable susceptance.
+
+  **Parameters:**
+  - `shunt_id_list` (List[str]): List of shunt compensator IDs
+
+  **Example:**
+  ```python
+  params.add_variable_shunt_compensators(['SHUNT1', 'SHUNT2'])
+  ```
+</ParamField>
+
+<ParamField path="add_constant_q_generators" type="method">
+  Indicate that given generators have constant target reactive power.
+
+  **Parameters:**
+  - `generator_id_list` (List[str]): List of generator IDs
+
+  **Example:**
+  ```python
+  params.add_constant_q_generators(['GEN1', 'GEN2'])
+  ```
+</ParamField>
+
+<ParamField path="add_variable_two_windings_transformers" type="method">
+  Indicate that given 2-winding transformers have variable ratio.
+
+  **Parameters:**
+  - `transformer_id_list` (List[str]): List of transformer IDs
+
+  **Example:**
+  ```python
+  params.add_variable_two_windings_transformers(['TFO1', 'TFO2'])
+  ```
+</ParamField>
+
+<ParamField path="add_specific_low_voltage_limits" type="method">
+  Override network low voltage limits.
+
+  **Parameters:**
+  - `low_limits` (List[Tuple[str, bool, float]]): List of (voltage_level_id, is_relative, limit_value)
+
+  **Example:**
+  ```python
+  # Absolute limit: Set VL1 low limit to 0.95 pu
+  params.add_specific_low_voltage_limits([('VL1', False, 0.95)])
+  
+  # Relative limit: Reduce VL2 low limit by 5%
+  params.add_specific_low_voltage_limits([('VL2', True, 0.95)])
+  ```
+</ParamField>
+
+<ParamField path="add_specific_high_voltage_limits" type="method">
+  Override network high voltage limits.
+
+  **Parameters:**
+  - `high_limits` (List[Tuple[str, bool, float]]): List of (voltage_level_id, is_relative, limit_value)
+
+  **Example:**
+  ```python
+  # Absolute limit: Set VL1 high limit to 1.05 pu
+  params.add_specific_high_voltage_limits([('VL1', False, 1.05)])
+  
+  # Relative limit: Increase VL2 high limit by 5%
+  params.add_specific_high_voltage_limits([('VL2', True, 1.05)])
+  ```
+</ParamField>
+
+<ParamField path="add_specific_voltage_limits" type="method">
+  Override network voltage limits (both low and high).
+
+  **Parameters:**
+  - `limits` (Dict[str, Tuple[float, float]]): Dictionary where keys are voltage level IDs, values are (lower_limit, upper_limit) as relative values
+
+  **Example:**
+  ```python
+  params.add_specific_voltage_limits({
+      'VL1': (0.95, 1.05),  # Reduce to 95%-105%
+      'VL2': (0.90, 1.10)   # Widen to 90%-110%
+  })
+  ```
+</ParamField>
+
+#### Objective Function
+
+<ParamField path="set_objective" type="method">
+  Set the objective function for voltage initializer.
+
+  **Parameters:**
+  - `objective` (VoltageInitializerObjective): Objective function type
+
+  **Enum Values:**
+  - `VoltageInitializerObjective.MIN_GENERATION`: Minimize generation
+  - `VoltageInitializerObjective.BETWEEN_HIGH_AND_LOW_VOLTAGE_LIMIT`: Target specific distance between limits (requires set_objective_distance)
+  - `VoltageInitializerObjective.SPECIFIC_VOLTAGE_PROFILE`: Target specific voltage profile
+
+  **Example:**
+  ```python
+  from pypowsybl.voltage_initializer import VoltageInitializerObjective
+  
+  params.set_objective(
+      VoltageInitializerObjective.BETWEEN_HIGH_AND_LOW_VOLTAGE_LIMIT
+  )
+  params.set_objective_distance(50.0)  # Target middle of range
+  ```
+</ParamField>
+
+<ParamField path="set_objective_distance" type="method">
+  Set objective distance for BETWEEN_HIGH_AND_LOW_VOLTAGE_LIMIT objective.
+
+  **Parameters:**
+  - `distance` (float): Distance in percentage (0-100)
+    - 0%: Target lower voltage limit
+    - 50%: Target middle of voltage range
+    - 100%: Target upper voltage limit
+
+  **Example:**
+  ```python
+  params.set_objective_distance(25.0)  # Target 25% between low and high
+  ```
+</ParamField>
+
+#### Logging Configuration
+
+<ParamField path="set_log_level_ampl" type="method">
+  Set log level for AMPL printings.
+
+  **Parameters:**
+  - `log_level_ampl` (VoltageInitializerLogLevelAmpl): Log level
+
+  **Enum Values:**
+  - `VoltageInitializerLogLevelAmpl.DEBUG`
+  - `VoltageInitializerLogLevelAmpl.INFO`
+  - `VoltageInitializerLogLevelAmpl.WARNING`
+  - `VoltageInitializerLogLevelAmpl.ERROR`
+
+  **Example:**
+  ```python
+  from pypowsybl.voltage_initializer import VoltageInitializerLogLevelAmpl
+  
+  params.set_log_level_ampl(VoltageInitializerLogLevelAmpl.INFO)
+  ```
+</ParamField>
+
+<ParamField path="set_log_level_solver" type="method">
+  Set log level for non-linear optimization solver printings.
+
+  **Parameters:**
+  - `log_level_solver` (VoltageInitializerLogLevelSolver): Log level
+
+  **Enum Values:**
+  - `VoltageInitializerLogLevelSolver.NOTHING`
+  - `VoltageInitializerLogLevelSolver.ONLY_RESULTS`
+  - `VoltageInitializerLogLevelSolver.EVERYTHING`
+
+  **Example:**
+  ```python
+  from pypowsybl.voltage_initializer import VoltageInitializerLogLevelSolver
+  
+  params.set_log_level_solver(VoltageInitializerLogLevelSolver.ONLY_RESULTS)
+  ```
+</ParamField>
+
+#### Advanced Parameters
+
+<ParamField path="set_reactive_slack_buses_mode" type="method">
+  Set reactive slack buses mode.
+
+  **Parameters:**
+  - `reactive_slack_buses_mode` (VoltageInitializerReactiveSlackBusesMode): Mode for reactive slack buses
+</ParamField>
+
+<ParamField path="set_min_plausible_low_voltage_limit" type="method">
+  Set minimal plausible value for low voltage limits in ACOPF solving.
+
+  **Parameters:**
+  - `min_plausible_low_voltage_level` (float): Value in p.u. (>= 0)
+</ParamField>
+
+<ParamField path="set_max_plausible_high_voltage_limit" type="method">
+  Set maximal plausible value for high voltage limits in ACOPF solving.
+
+  **Parameters:**
+  - `max_plausible_high_voltage_limit` (float): Value in p.u. (> 0)
+</ParamField>
+
+<ParamField path="set_active_power_variation_rate" type="method">
+  Set weight to favor minimization of active power produced by generators.
+
+  **Parameters:**
+  - `active_power_variation_rate` (float): Rate between 0 and 1
+    - 0: Minimize sum of generations
+    - 1: Minimize sum of squared differences between target and value
+</ParamField>
+
+<ParamField path="set_min_plausible_active_power_threshold" type="method">
+  Set threshold of active and reactive power considered as null.
+
+  **Parameters:**
+  - `min_plausible_active_power_threshold` (float): Threshold (>= 0)
+</ParamField>
+
+<ParamField path="set_low_impedance_threshold" type="method">
+  Set threshold of impedance considered as null.
+
+  **Parameters:**
+  - `low_impedance_threshold` (float): Threshold (>= 0)
+</ParamField>
+
+<ParamField path="set_min_nominal_voltage_ignored_bus" type="method">
+  Set threshold for ignoring voltage levels with low nominal voltage.
+
+  **Parameters:**
+  - `min_nominal_voltage_ignored_bus` (float): Voltage in kV (>= 0)
+</ParamField>
+
+<ParamField path="set_min_nominal_voltage_ignored_voltage_bounds" type="method">
+  Set threshold for replacing voltage limits of low voltage levels.
+
+  **Parameters:**
+  - `min_nominal_voltage_ignored_voltage_bounds` (float): Voltage in kV (>= 0)
+</ParamField>
+
+#### Scaling Factors
+
+<ParamField path="set_default_variable_scaling_factor" type="method">
+  Set scaling of all variables (except reactive slacks and transformer ratios).
+
+  **Parameters:**
+  - `default_variable_scaling_factor` (float): Scaling factor (> 0)
+</ParamField>
+
+<ParamField path="set_default_constraint_scaling_factor" type="method">
+  Set scaling factor applied to all constraints.
+
+  **Parameters:**
+  - `default_constraint_scaling_factor` (float): Scaling factor (>= 0)
+</ParamField>
+
+<ParamField path="set_reactive_slack_variable_scaling_factor" type="method">
+  Set scaling factor for reactive slack variables.
+
+  **Parameters:**
+  - `reactive_slack_variable_scaling_factor` (float): Scaling factor (> 0)
+</ParamField>
+
+<ParamField path="set_twt_ratio_variable_scaling_factor" type="method">
+  Set scaling factor for transformer ratio variables.
+
+  **Parameters:**
+  - `twt_ratio_variable_scaling_factor` (float): Scaling factor (> 0)
+</ParamField>
+
+### VoltageInitializerResults
+
+Results of a voltage initializer run.
+
+```python
+# Results are returned by run()
+result = run(network=network, params=params)
+```
+
+#### Properties
+
+<ResponseField name="status" type="VoltageInitializerStatus">
+  Status of the optimization.
+
+  **Enum Values:**
+  - `VoltageInitializerStatus.OK`: Optimization succeeded
+  - `VoltageInitializerStatus.NOT_OK`: Optimization failed
+
+  **Example:**
+  ```python
+  from pypowsybl.voltage_initializer import VoltageInitializerStatus
+  
+  if result.status == VoltageInitializerStatus.OK:
+      print("Voltage initialization successful")
+  else:
+      print("Voltage initialization failed")
+      print(f"Indicators: {result.indicators}")
+  ```
+</ResponseField>
+
+<ResponseField name="indicators" type="Dict[str, str]">
+  Indicators from the optimization as a dictionary.
+
+  Useful for debugging when optimization fails.
+
+  **Example:**
+  ```python
+  print("Optimization indicators:")
+  for key, value in result.indicators.items():
+      print(f"  {key}: {value}")
+  ```
+</ResponseField>
+
+#### Methods
+
+<ParamField path="apply_all_modifications" type="method">
+  Apply all modifications found by voltage initializer to the network.
+
+  **Parameters:**
+  - `network` (Network): Network on which to apply modifications
+
+  **Example:**
+  ```python
+  result.apply_all_modifications(network)
+  
+  # Now network has initialized voltages
+  buses = network.get_buses()
+  print(buses[['v_mag', 'v_angle']])
+  ```
+</ParamField>
+
+## Complete Example
+
+```python
+import pypowsybl as pp
+from pypowsybl.voltage_initializer import (
+    run,
+    VoltageInitializerParameters,
+    VoltageInitializerObjective,
+    VoltageInitializerStatus,
+    VoltageInitializerLogLevelAmpl
+)
+
+# Load network
+network = pp.network.load('network.xiidm')
+
+# Create and configure parameters
+params = VoltageInitializerParameters()
+
+# Set objective to target middle of voltage range
+params.set_objective(
+    VoltageInitializerObjective.BETWEEN_HIGH_AND_LOW_VOLTAGE_LIMIT
+)
+params.set_objective_distance(50.0)
+
+# Configure variable elements
+params.add_variable_shunt_compensators(['SHUNT1', 'SHUNT2'])
+params.add_variable_two_windings_transformers(['TFO1'])
+
+# Adjust voltage limits for problematic voltage levels
+params.add_specific_voltage_limits({
+    'VL_400': (0.95, 1.05),
+    'VL_225': (0.90, 1.10)
+})
+
+# Set logging
+params.set_log_level_ampl(VoltageInitializerLogLevelAmpl.INFO)
+
+# Run voltage initializer
+result = run(network=network, params=params, debug=False)
+
+# Check results
+if result.status == VoltageInitializerStatus.OK:
+    print("Voltage initialization successful!")
+    
+    # Apply modifications to network
+    result.apply_all_modifications(network)
+    
+    # Verify voltages
+    buses = network.get_buses()
+    print("\nBus voltages after initialization:")
+    print(buses[['v_mag', 'v_angle']].head())
+    
+    # Run power flow with initialized voltages
+    lf_result = pp.loadflow.run_ac(network)
+    print(f"\nLoad flow converged: {lf_result[0].status}")
+else:
+    print("Voltage initialization failed!")
+    print("\nIndicators:")
+    for key, value in result.indicators.items():
+        print(f"  {key}: {value}")
+```
+
+## Troubleshooting Example
+
+```python
+import pypowsybl as pp
+from pypowsybl.voltage_initializer import (
+    run,
+    VoltageInitializerParameters,
+    VoltageInitializerStatus
+)
+
+network = pp.network.load('problematic_network.xiidm')
+params = VoltageInitializerParameters()
+
+# First attempt
+result = run(network=network, params=params)
+
+if result.status != VoltageInitializerStatus.OK:
+    print("Initial run failed. Trying with relaxed constraints...")
+    
+    # Relax voltage limits
+    voltage_levels = network.get_voltage_levels()
+    relaxed_limits = {
+        vl_id: (0.85, 1.15)  # Wider range
+        for vl_id in voltage_levels.index
+    }
+    params.add_specific_voltage_limits(relaxed_limits)
+    
+    # Increase plausible limits
+    params.set_min_plausible_low_voltage_limit(0.8)
+    params.set_max_plausible_high_voltage_limit(1.2)
+    
+    # Retry
+    result = run(network=network, params=params)
+    
+    if result.status == VoltageInitializerStatus.OK:
+        print("Success with relaxed constraints!")
+        result.apply_all_modifications(network)
+    else:
+        print("Still failing. Indicators:")
+        for key, value in result.indicators.items():
+            print(f"  {key}: {value}")
+```
+
+## Notes
+
+- Voltage initializer uses AMPL and a non-linear solver (typically IPOPT)
+- It's particularly useful when network voltages are not properly initialized
+- The optimization may fail due to infeasibility; use specific voltage limits to resolve
+- Debug mode keeps temporary files for troubleshooting
+- Variable shunts, transformers, and generators give the optimizer more flexibility
+- Results must be explicitly applied to the network using `apply_all_modifications()`

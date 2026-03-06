@@ -1,0 +1,458 @@
+---
+title: Sensitivity Analysis
+description: Calculate power transfer distribution factors (PTDF) and sensitivity coefficients
+---
+
+Sensitivity analysis computes how changes in network injections or controls affect power flows and voltages. It's essential for market operations, congestion management, and system planning.
+
+## Overview
+
+Sensitivity analysis calculates:
+
+- **PTDF** (Power Transfer Distribution Factors): How power transfers affect line flows
+- **PSDF** (Phase Shift Distribution Factors): Impact of phase shifters
+- **Voltage sensitivities**: How injections affect bus voltages (AC only)
+
+## DC Sensitivity Analysis
+
+### Basic Example
+
+Compute how load changes affect line flows:
+
+```python
+import pypowsybl as pp
+
+network = pp.network.create_eurostag_tutorial_example1_network()
+
+# Create DC analysis
+analysis = pp.sensitivity.create_dc_analysis()
+
+# Define sensitivity matrix: branches vs variables
+analysis.add_branch_flow_factor_matrix(
+    branches_ids=['NHV1_NHV2_1', 'NHV1_NHV2_2'], 
+    variables_ids=['LOAD']
+)
+
+# Run analysis
+result = analysis.run(network)
+
+# Get reference flows
+print(result.get_reference_matrix())
+#                   NHV1_NHV2_1  NHV1_NHV2_2
+# reference_values        300.0        300.0
+
+# Get sensitivity values
+print(result.get_sensitivity_matrix())
+#       NHV1_NHV2_1  NHV1_NHV2_2
+# LOAD         -0.5         -0.5
+```
+
+Interpretation: A 1 MW increase in LOAD causes a 0.5 MW decrease in flow on each line.
+
+### Multiple Matrices
+
+Create named matrices for different analyses:
+
+```python
+analysis = pp.sensitivity.create_dc_analysis()
+
+# Matrix 1: Lines vs Loads
+analysis.add_branch_flow_factor_matrix(
+    branches_ids=['NHV1_NHV2_1', 'NHV1_NHV2_2'],
+    variables_ids=['LOAD'],
+    matrix_id='m1'
+)
+
+# Matrix 2: Lines vs Generators
+analysis.add_branch_flow_factor_matrix(
+    branches_ids=['NHV1_NHV2_1'],
+    variables_ids=['GEN'],
+    matrix_id='m2'
+)
+
+result = analysis.run(network)
+
+# Retrieve specific matrices
+print(result.get_reference_matrix('m1'))
+print(result.get_sensitivity_matrix('m1'))
+print(result.get_sensitivity_matrix('m2'))
+```
+
+## Zone-Based Analysis
+
+Analyze power transfers between control zones (countries, regions).
+
+### Zone to Slack Sensitivity
+
+Compute how injections from a zone affect flows:
+
+```python
+n = pp.network.load('simple-eu.uct')
+
+# Create zone with all German generators
+zone_de = pp.sensitivity.create_country_zone(n, 'DE')
+
+# Disable distributed slack
+params = pp.loadflow.Parameters(distributed_slack=False)
+
+sa = pp.sensitivity.create_dc_analysis()
+sa.set_zones([zone_de])
+
+# Calculate DE zone sensitivity on border line
+sa.add_branch_flow_factor_matrix(
+    ['BBE2AA1  FFR3AA1  1'], 
+    ['DE'], 
+    'm'
+)
+
+results = sa.run(n, params)
+print(results.get_sensitivity_matrix('m'))
+#         BBE2AA1  FFR3AA1  1
+# DE             -0.45182
+```
+
+### Zone to Zone Sensitivity (PTDF)
+
+Calculate power transfer distribution factors:
+
+```python
+zone_fr = pp.sensitivity.create_country_zone(n, 'FR')
+zone_de = pp.sensitivity.create_country_zone(n, 'DE')
+zone_be = pp.sensitivity.create_country_zone(n, 'BE')
+zone_nl = pp.sensitivity.create_country_zone(n, 'NL')
+
+sa = pp.sensitivity.create_dc_analysis()
+sa.set_zones([zone_fr, zone_de, zone_be, zone_nl])
+
+# Monitor border lines for various power transfers
+sa.add_branch_flow_factor_matrix(
+    ['BBE2AA1  FFR3AA1  1', 'FFR2AA1  DDE3AA1  1'],
+    ['FR', ('FR', 'DE'), ('DE', 'FR'), 'NL'],
+    'm'
+)
+
+result = sa.run(n, params)
+print(result.get_sensitivity_matrix('m'))
+#            BBE2AA1  FFR3AA1  1  FFR2AA1  DDE3AA1  1
+# FR                  -0.708461             0.291539
+# FR -> DE            -0.256641             0.743359
+# DE -> FR             0.256641            -0.743359
+# NL                  -0.225206            -0.225206
+```
+
+<Note>
+  Zone-to-zone sensitivity `('FR', 'DE')` means: increase FR injection and decrease DE injection by the same amount.
+</Note>
+
+## Working with Zones
+
+### Creating Zones
+
+<CodeGroup>
+  ```python Country Zone
+  zone_de = pp.sensitivity.create_country_zone(n, 'DE')
+  ```
+  
+  ```python Empty Zone
+  zone_custom = pp.sensitivity.create_empty_zone('CUSTOM')
+  zone_custom.add_injection('GEN1')
+  zone_custom.add_injection('GEN2')
+  ```
+  
+  ```python From GLSK File
+  zones = pp.sensitivity.create_zones_from_glsk_file(
+      n, 
+      'glsk_sample.xml', 
+      datetime.datetime(2019, 1, 8, 0, 0)
+  )
+  ```
+</CodeGroup>
+
+### Zone Shift Keys
+
+Control how injections are weighted within a zone:
+
+```python
+from pypowsybl.sensitivity import ZoneKeyType
+
+# Use generator target power (default)
+zone = pp.sensitivity.create_country_zone(n, 'DE', 
+    ZoneKeyType.GENERATOR_TARGET_P)
+
+# Use generator maximum power
+zone = pp.sensitivity.create_country_zone(n, 'DE', 
+    ZoneKeyType.GENERATOR_MAX_P)
+
+# Use load power
+zone = pp.sensitivity.create_country_zone(n, 'DE', 
+    ZoneKeyType.LOAD_P0)
+
+# View shift keys
+print(zone.shift_keys_by_injections_ids)
+# {'DDE1AA1_generator': 2500.0,
+#  'DDE2AA1_generator': 2000.0,
+#  'DDE3AA1_generator': 1500.0}
+```
+
+### Modifying Zones
+
+Move injections between zones:
+
+```python
+zone_fr = pp.sensitivity.create_country_zone(n, 'FR')
+zone_de = pp.sensitivity.create_country_zone(n, 'DE')
+
+# Move a generator from DE to FR
+zone_de.move_injection_to(zone_fr, 'DDE3AA1_generator')
+
+print(zone_fr.injections_ids)
+# ['FFR1AA1_generator', 'FFR2AA1_generator', 
+#  'FFR3AA1_generator', 'DDE3AA1_generator']
+
+print(zone_de.injections_ids)
+# ['DDE1AA1_generator', 'DDE2AA1_generator']
+```
+
+## X-Node Sensitivity
+
+Calculate sensitivity to boundary nodes (X-nodes) in UCTE/CGMES networks:
+
+```python
+n = pp.network.load('simple-eu-xnode.uct')
+
+# X-nodes appear as dangling lines
+print(n.get_dangling_lines())
+#               pairing_key ucte_xnode_code
+# id
+# NNL2AA1  XXXXXX11   NNL2AA1_0       NNL2AA1_0
+
+# Create zone for X-node
+zone_x = pp.sensitivity.create_empty_zone('X')
+zone_x.add_injection('NNL2AA1  XXXXXX11 1')
+
+sa = pp.sensitivity.create_dc_analysis()
+sa.set_zones([zone_x])
+sa.add_branch_flow_factor_matrix(['BBE2AA1  FFR3AA1  1'], ['X'], 'm')
+
+result = sa.run(n)
+print(result.get_sensitivity_matrix('m'))
+#    BBE2AA1  FFR3AA1  1
+# X             0.176618
+```
+
+## AC Sensitivity Analysis
+
+Perform more accurate AC analysis:
+
+```python
+analysis = pp.sensitivity.create_ac_analysis()
+
+# Same as DC for active power flows
+analysis.add_branch_flow_factor_matrix(
+    branches_ids=['NHV1_NHV2_1', 'NHV1_NHV2_2'],
+    variables_ids=['LOAD']
+)
+
+result = analysis.run(network)
+```
+
+### Voltage Sensitivity
+
+Compute how voltage setpoints affect bus voltages:
+
+```python
+analysis = pp.sensitivity.create_ac_analysis()
+
+# Buses vs regulating equipment
+analysis.add_bus_voltage_factor_matrix(
+    bus_ids=['VLHV1_0', 'VLLOAD_0'],
+    target_voltage_ids=['GEN']
+)
+
+result = analysis.run(network)
+print(result.get_sensitivity_matrix())
+#            VLHV1_0  VLLOAD_0
+# GEN      17.629602   7.89637
+```
+
+Interpretation: A 1 kV increase in GEN's target voltage increases VLHV1_0 voltage by 17.6 kV.
+
+## Post-Contingency Analysis
+
+Calculate sensitivities after contingencies:
+
+```python
+analysis = pp.sensitivity.create_dc_analysis()
+
+# Define sensitivity matrix
+analysis.add_branch_flow_factor_matrix(
+    branches_ids=['NHV1_NHV2_1', 'NHV1_NHV2_2'],
+    variables_ids=['LOAD'],
+    matrix_id='m'
+)
+
+# Add contingency
+analysis.add_single_element_contingency('NHV1_NHV2_1')
+
+result = analysis.run(network)
+
+# Get post-contingency results
+print(result.get_reference_matrix('m', 'NHV1_NHV2_1'))
+#                   NHV1_NHV2_1  NHV1_NHV2_2
+# reference_values          NaN        600.0
+
+print(result.get_sensitivity_matrix('m', 'NHV1_NHV2_1'))
+#       NHV1_NHV2_1  NHV1_NHV2_2
+# LOAD          0.0         -1.0
+```
+
+### Selective Contingency Analysis
+
+Control which states to analyze:
+
+```python
+analysis = pp.sensitivity.create_dc_analysis()
+
+# Pre-contingency only
+analysis.add_precontingency_branch_flow_factor_matrix(
+    branches_ids=['NHV1_NHV2_1', 'NHV1_NHV2_2'],
+    variables_ids=['LOAD'],
+    matrix_id='precontingency'
+)
+
+# Specific post-contingency states
+analysis.add_postcontingency_branch_flow_factor_matrix(
+    branches_ids=['NHV1_NHV2_1', 'NHV1_NHV2_2'],
+    variables_ids=['GEN'],
+    contingencies_ids=['NHV1_NHV2_1'],
+    matrix_id='postcontingency'
+)
+
+analysis.add_single_element_contingency('NHV1_NHV2_1')
+result = analysis.run(network)
+
+print(result.get_sensitivity_matrix('precontingency'))
+print(result.get_sensitivity_matrix('postcontingency', 'NHV1_NHV2_1'))
+```
+
+## Advanced Factor Configuration
+
+Full control over sensitivity factors:
+
+```python
+analysis = pp.sensitivity.create_ac_analysis()
+
+analysis.add_factor_matrix(
+    functions_ids=['NHV1_NHV2_1'],
+    variables_ids=['LOAD'],
+    contingency_context_type=pp.sensitivity.ContingencyContextType.NONE,
+    contingencies_ids=[],
+    sensitivity_function_type=pp.sensitivity.SensitivityFunctionType.BRANCH_ACTIVE_POWER_2,
+    sensitivity_variable_type=pp.sensitivity.SensitivityVariableType.INJECTION_ACTIVE_POWER
+)
+
+result = analysis.run(network)
+print(result.get_sensitivity_matrix())
+#           NHV1_NHV2_1
+# LOAD         0.501398
+```
+
+### Supported Function Types
+
+- `BRANCH_ACTIVE_POWER_1`, `BRANCH_ACTIVE_POWER_2`
+- `BRANCH_REACTIVE_POWER_1`, `BRANCH_REACTIVE_POWER_2`
+- `BRANCH_CURRENT_1`, `BRANCH_CURRENT_2`
+- `BUS_VOLTAGE`
+
+### Supported Variable Types
+
+- `INJECTION_ACTIVE_POWER`
+- `INJECTION_REACTIVE_POWER`
+- `TRANSFORMER_PHASE`
+- `BUS_TARGET_VOLTAGE`
+- `HVDC_LINE_ACTIVE_POWER`
+- `AUTO_DETECT`
+
+## GLSK Files
+
+Load shift keys from UCTE GLSK files:
+
+```python
+import datetime
+
+n = pp.network.load('simple-eu.uct')
+
+# Method 1: Load all zones from file
+zones = pp.sensitivity.create_zones_from_glsk_file(
+    n, 
+    'glsk_sample.xml', 
+    datetime.datetime(2019, 1, 8, 0, 0)
+)
+
+sa = pp.sensitivity.create_dc_analysis()
+sa.set_zones(zones)
+sa.add_branch_flow_factor_matrix(['BBE2AA1  FFR3AA1  1'], 
+                                 ['10YCB-GERMANY--8'], 'm')
+results = sa.run(n, params)
+```
+
+```python
+# Method 2: Granular control
+glsk_document = pp.glsk.load('glsk_sample.xml')
+t_start = glsk_document.get_gsk_time_interval_start()
+
+de_generators = glsk_document.get_points_for_country(
+    n, '10YCB-GERMANY--8', t_start
+)
+de_shift_keys = glsk_document.get_glsk_factors(
+    n, '10YCB-GERMANY--8', t_start
+)
+
+zone_de = pp.sensitivity.create_zone_from_injections_and_shift_keys(
+    '10YCB-GERMANY--8', de_generators, de_shift_keys
+)
+```
+
+## Use Cases
+
+<Accordion title="Market Clearing">
+  Calculate PTDFs for:
+  - Zonal pricing
+  - Flow-based market coupling
+  - Congestion rent allocation
+  - Available transfer capacity (ATC)
+</Accordion>
+
+<Accordion title="Grid Planning">
+  Analyze:
+  - Critical network elements
+  - Reinforcement benefits
+  - Renewable integration impact
+  - N-1 security margins
+</Accordion>
+
+<Accordion title="Real-Time Operations">
+  Support:
+  - Redispatch optimization
+  - Congestion management
+  - Remedial action schemes
+  - State estimation validation
+</Accordion>
+
+## Performance Tips
+
+- Use DC analysis for large-scale studies (much faster)
+- Limit the number of monitored branches
+- Use pre/post-contingency matrices selectively
+- Batch similar analyses together
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Short-Circuit Analysis" icon="bolt" href="/user-guide/short-circuit">
+    Calculate fault currents
+  </Card>
+  <Card title="Dynamic Simulation" icon="wave-square" href="/user-guide/dynamic-simulation">
+    Run time-domain simulations
+  </Card>
+</CardGroup>
