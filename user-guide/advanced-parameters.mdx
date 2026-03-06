@@ -376,6 +376,79 @@ print_memory_usage()
   ```
 </Accordion>
 
+## Configuration Functions
+
+PyPowSyBl provides utility functions for managing configuration settings.
+
+### print_version()
+
+Display version information for PyPowSyBl and its components:
+
+```python
+import pypowsybl as pp
+
+pp.print_version()
+```
+
+This prints a table showing versions of:
+- PyPowSyBl Python package
+- PowSyBl Core Java libraries
+- Native library components
+
+**Use case**: Debugging, verifying installation, reporting issues
+
+### set_config_read()
+
+Control whether PyPowSyBl reads the `~/.itools/config.yml` configuration file:
+
+```python
+import pypowsybl as pp
+
+# Disable config file reading (use defaults only)
+pp.set_config_read(False)
+
+# Re-enable config file reading
+pp.set_config_read(True)
+```
+
+<ParamField path="read_config" type="bool" default={true}>
+  Whether to read the configuration file
+</ParamField>
+
+**Use case**: Override system-wide configuration, isolate test environments
+
+### is_config_read()
+
+Check the current configuration file reading status:
+
+```python
+import pypowsybl as pp
+
+if pp.is_config_read():
+    print("Using ~/.itools/config.yml")
+else:
+    print("Using default configuration")
+```
+
+**Returns**: `bool` - `True` if config file is being read, `False` otherwise
+
+### Configuration File Format
+
+The `~/.itools/config.yml` file allows system-wide configuration of PowSyBl parameters:
+
+```yaml
+load-flow-default-parameters:
+  voltageInitMode: DC_VALUES
+  transformerVoltageControlOn: true
+  
+security-analysis-default-parameters:
+  flowProportionalThreshold: 0.1
+```
+
+<Note>
+Configuration file settings can be overridden by explicitly passing parameters to functions.
+</Note>
+
 ## Next Steps
 
 <CardGroup cols={2}>
